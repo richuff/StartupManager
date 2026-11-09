@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/StartupManager.Cli/StartupManager.Cli.csproj" />
+    <Project Path="src/StartupManager.Core/StartupManager.Core.csproj" />
+    <Project Path="src/StartupManager.Gui/StartupManager.Gui.csproj" />
+    <Project Path="src/StartupManager.Mcp/StartupManager.Mcp.csproj" />
+  </Folder>
+</Solution>
