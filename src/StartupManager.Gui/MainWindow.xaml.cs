@@ -25,7 +25,8 @@ public partial class MainWindow : Window
         NavList.SelectedIndex = 0;
         StartupPage.Visibility = Visibility.Visible;
         DelayedPage.Visibility = Visibility.Collapsed;
-        PageTitle.Text = "启动项";
+        PageIcon.Data = System.Windows.Media.Geometry.Parse(
+            "M3 4h14v2H3V4zm0 5h14v2H3V9zm0 5h14v2H3v-2z");
 
         _vm.Refresh();
         SetUpQueueWatcher();
@@ -139,12 +140,13 @@ public partial class MainWindow : Window
         StartupPage.Visibility = isStartup ? Visibility.Visible : Visibility.Collapsed;
         DelayedPage.Visibility = tag == "Delayed" ? Visibility.Visible : Visibility.Collapsed;
         QueuePage.Visibility = tag == "Queues" ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = tag switch
+        PageIcon.Data = System.Windows.Media.Geometry.Parse(tag switch
         {
-            "Delayed" => "延迟启动项",
-            "Queues" => "执行队列",
-            _ => "启动项",
-        };
+            // clock = delayed, stacked rows = queue, list = startup entries
+            "Delayed" => "M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3zm0 1v4l3 2 .9-1.5L9 8V4H8z",
+            "Queues" => "M3 3h12v3H3V3zm0 5h12v3H3V8zm0 5h12v3H3v-3z",
+            _ => "M3 4h14v2H3V4zm0 5h14v2H3V9zm0 5h14v2H3v-2z",
+        });
     }
 
     private void OnRefresh(object sender, RoutedEventArgs e) => _vm.Refresh();
@@ -564,15 +566,29 @@ public partial class AddWindow : Window
         }
         if (fixedLocation is not null)
         {
-            LocationCombo.ItemsSource = new[] { fixedLocation };
-            LocationCombo.SelectedItem = fixedLocation;
+            // Show the Chinese description but keep the enum name as the value.
+            LocationCombo.ItemsSource = new[] { new LocationItem(fixedLocation) };
+            LocationCombo.SelectedIndex = 0;
             LocationCombo.IsEnabled = false;
         }
         else
         {
-            LocationCombo.ItemsSource = locations;
-            LocationCombo.SelectedItem = nameof(EntryLocation.CurrentUserRun);
+            LocationCombo.ItemsSource = locations.Select(l => new LocationItem(l)).ToList();
+            LocationCombo.SelectedIndex = 0;
         }
+    }
+
+    /// <summary>A location combo entry: Chinese text for display, enum name for the value.</summary>
+    public sealed class LocationItem
+    {
+        public string Value { get; }
+        public string Display { get; }
+        public LocationItem(string value)
+        {
+            Value = value;
+            Display = Enum.TryParse<EntryLocation>(value, out var loc) ? loc.Describe() : value;
+        }
+        public override string ToString() => Display;
     }
 
     private void DelayBox_OnTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -624,7 +640,8 @@ public partial class AddWindow : Window
     {
         Name = NameBox.Text.Trim();
         Command = CommandBox.Text.Trim();
-        Location = (LocationCombo.SelectedItem as string) ?? nameof(EntryLocation.CurrentUserRun);
+        Location = (LocationCombo.SelectedItem as LocationItem)?.Value
+                   ?? nameof(EntryLocation.CurrentUserRun);
         Enabled = EnabledBox.IsChecked != false;
         if (string.IsNullOrEmpty(Name) || string.IsNullOrEmpty(Command))
         {
