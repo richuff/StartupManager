@@ -6,23 +6,29 @@ using StartupManager.Core.Models;
 namespace StartupManager.Gui;
 
 /// <summary>
-/// Add or edit an execution-queue item: just a name and a command.
-/// Delay and enabled state are set in the grid, so the dialog stays minimal.
+/// Add or edit an execution-queue item: name, command, delay and enabled state.
 /// Electron-style borderless window matching the rest of the app.
 /// </summary>
 public partial class EditQueueItemWindow : Window
 {
     public string ItemName { get; private set; } = "";
     public string Command { get; private set; } = "";
+    public int DelaySeconds { get; private set; }
+    public bool Enabled { get; private set; } = true;
 
     /// <summary>True when the dialog was opened to add a new item.</summary>
     public bool IsNew { get; }
 
     /// <summary>Create the dialog pre-filled from an existing item.</summary>
-    public EditQueueItemWindow(QueueItem item) : this(item.Name, item.Command, isNew: false) { }
+    public EditQueueItemWindow(QueueItem item) : this(item.Name, item.Command, isNew: false)
+    {
+        DelayBox.Text = item.DelaySeconds.ToString();
+        EnabledBox.IsChecked = item.Enabled;
+    }
 
-    /// <summary>Create the dialog empty (or lightly pre-filled) for a new item.</summary>
-    public EditQueueItemWindow(string? name = null, string? command = null, bool isNew = true)
+    /// <summary>Create the dialog for a new item (delay defaults to 0, enabled by default).</summary>
+    public EditQueueItemWindow(string? name = null, string? command = null, bool isNew = true,
+        int delaySeconds = 0)
     {
         InitializeComponent();
 
@@ -30,6 +36,8 @@ public partial class EditQueueItemWindow : Window
         TitleText.Text = isNew ? "添加应用" : "修改队列项";
         NameBox.Text = name ?? "";
         CommandBox.Text = command ?? "";
+        DelayBox.Text = delaySeconds.ToString();
+        EnabledBox.IsChecked = true;
     }
 
     private void OnDrag(object sender, MouseButtonEventArgs e)
@@ -65,8 +73,17 @@ public partial class EditQueueItemWindow : Window
             return;
         }
 
+        if (!int.TryParse(DelayBox.Text.Trim(), out var delay) || delay < 0)
+        {
+            MessageBox.Show("延迟秒数必须是一个非负整数。", "输入有误",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         ItemName = name;
         Command = command;
+        DelaySeconds = delay;
+        Enabled = EnabledBox.IsChecked != false;
 
         DialogResult = true;
         Close();

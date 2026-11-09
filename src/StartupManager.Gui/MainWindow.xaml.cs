@@ -394,13 +394,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Queue items only need a name and a command; delay/enabled are set in the grid.
+        // Queue items only need a name, command and delay; location is a startup-entry concept.
         var dlg = new EditQueueItemWindow(isNew: true) { Owner = this };
         if (dlg.ShowDialog() != true) return;
 
         try
         {
-            _vm.AddQueueItem(_vm.SelectedQueue.Id, dlg.ItemName, dlg.Command, enabled: true, delaySeconds: 0);
+            _vm.AddQueueItem(_vm.SelectedQueue.Id, dlg.ItemName, dlg.Command,
+                dlg.Enabled, dlg.DelaySeconds);
         }
         catch (Exception ex)
         {
@@ -516,9 +517,8 @@ public partial class MainWindow : Window
         var dlg = new EditQueueItemWindow(item) { Owner = this };
         if (dlg.ShowDialog() != true) return;
 
-        // Delay and enabled keep their current values: the dialog only edits name/command.
         var error = _vm.EditQueueItem(item, dlg.ItemName, dlg.Command,
-            item.DelaySeconds, item.Enabled);
+            dlg.DelaySeconds, dlg.Enabled);
         if (error is not null)
         {
             MessageBox.Show(error, "修改失败", MessageBoxButton.OK, MessageBoxImage.Warning);

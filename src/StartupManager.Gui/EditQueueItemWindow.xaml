@@ -89,7 +89,15 @@
                     </Button>
                 </Grid>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Label Content="延迟（秒，从点击「一键启动队列」起算）：" Target="{Binding ElementName=DelayBox}"
+                       Padding="0,10,0,4" Foreground="#1F2329"/>
+                <TextBox x:Name="DelayBox" Padding="10,7" BorderBrush="#E5E6EB" BorderThickness="1"
+                         Background="White" Foreground="#1F2329"/>
+
+                <CheckBox x:Name="EnabledBox" Content="启用（不勾选则一键启动时跳过该项）"
+                          Margin="0,12,0,18" Foreground="#1F2329"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="确定" Width="88" Margin="0,0,10,0" Padding="10,8" IsDefault="True"
                             Background="#4D6BFE" BorderThickness="0" Foreground="White" Cursor="Hand" Click="OnOk">
                         <Button.Style>
