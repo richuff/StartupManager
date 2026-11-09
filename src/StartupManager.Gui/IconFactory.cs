@@ -104,9 +104,9 @@ internal static class IconFactory
         return ms.ToArray();
     }
 
-    private static Point Polar(double cx, double cy, double r, double degrees)
+    private static System.Windows.Point Polar(double cx, double cy, double r, double degrees)
     {
         var rad = degrees * Math.PI / 180.0;
-        return new Point(cx + r * Math.Cos(rad), cy + r * Math.Sin(rad));
+        return new System.Windows.Point(cx + r * Math.Cos(rad), cy + r * Math.Sin(rad));
     }
 }

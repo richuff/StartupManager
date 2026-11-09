@@ -21,7 +21,7 @@
                         <MenuItem Header="刷新" Tag="↻" Style="{StaticResource GlyphMenuItem}" Click="OnRefresh"/>
                         <MenuItem Header="新建启动项" Tag="＋" Style="{StaticResource GlyphMenuItem}" Click="OnAdd"/>
                         <Separator Style="{StaticResource MenuSeparator}"/>
-                        <MenuItem Header="退出" Tag="✕" Style="{StaticResource GlyphMenuItem}" Click="OnExit"/>
+                        <MenuItem Header="退出程序" Tag="✕" Style="{StaticResource GlyphMenuItem}" Click="OnExit"/>
                     </MenuItem>
                     <MenuItem Header="设置">
                         <MenuItem Header="MCP 服务…" Tag="⚙" Style="{StaticResource GlyphMenuItem}" Click="OnShowMcp"/>

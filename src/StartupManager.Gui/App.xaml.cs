@@ -6,7 +6,7 @@ using StartupManager.Core.Models;
 
 namespace StartupManager.Gui;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     private static System.Windows.Media.ImageSource? _appIcon;
 

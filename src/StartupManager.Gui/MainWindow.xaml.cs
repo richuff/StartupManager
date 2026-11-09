@@ -13,6 +13,11 @@ public partial class MainWindow : Window
     private FileSystemWatcher? _queueWatcher;
     private System.Windows.Threading.DispatcherTimer? _queueReloadTimer;
 
+    // System tray: closing the window hides it here instead of quitting.
+    private TrayIcon? _trayIcon;
+    private bool _reallyExiting;
+    private System.Windows.Interop.HwndSource? _hwndSource;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -31,6 +36,84 @@ public partial class MainWindow : Window
 
         _vm.Refresh();
         SetUpQueueWatcher();
+        SetUpTrayIcon();
+    }
+
+    /// <summary>Create the system-tray icon (Win32, no WinForms dependency).</summary>
+    private void SetUpTrayIcon()
+    {
+        try
+        {
+            var helper = new System.Windows.Interop.WindowInteropHelper(this);
+            var hwnd = helper.EnsureHandle();
+
+            // Extract the packaged app.ico to a temp file for the Win32 icon API.
+            var iconPath = ExtractAppIcon();
+
+            _trayIcon = new TrayIcon(hwnd, iconPath);
+            _trayIcon.ShowRequested += ShowMainWindow;
+            _trayIcon.ExitRequested += ReallyExit;
+
+            // Hook the window procedure to receive tray callback messages.
+            _hwndSource = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
+            _hwndSource?.AddHook(TrayWndProc);
+
+            // If tray creation failed, OnClosing falls back to a normal quit.
+            if (!_trayIcon.IsAvailable)
+            {
+                _trayIcon.Dispose();
+                _trayIcon = null;
+            }
+        }
+        catch
+        {
+            _trayIcon = null; // tray unavailable -> close behaves normally
+        }
+    }
+
+    private IntPtr TrayWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == TrayIcon.TrayCallbackMessage)
+        {
+            _trayIcon?.HandleCallback(lParam);
+            handled = true;
+        }
+        return IntPtr.Zero;
+    }
+
+    private static string? ExtractAppIcon()
+    {
+        try
+        {
+            var uri = new Uri("pack://application:,,,/Assets/app.ico", UriKind.Absolute);
+            using var stream = System.Windows.Application.GetResourceStream(uri)?.Stream;
+            if (stream is null) return null;
+
+            var path = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "startupmanager-tray.ico");
+            using var fs = System.IO.File.Create(path);
+            stream.CopyTo(fs);
+            return path;
+        }
+        catch { return null; }
+    }
+
+    private void ShowMainWindow()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+        Topmost = true;   // bring to front reliably
+        Topmost = false;
+    }
+
+    /// <summary>Quit for real (used by the tray "退出" item and the 编辑→退出 menu).</summary>
+    private void ReallyExit()
+    {
+        _reallyExiting = true;
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+        System.Windows.Application.Current.Shutdown();
     }
 
     /// <summary>
@@ -97,11 +180,35 @@ public partial class MainWindow : Window
 
     private void OnReloadQueues(object sender, RoutedEventArgs e) => ReloadQueuesFromDisk();
 
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        // The window's X button only hides to the tray. A real quit goes through
+        // ReallyExit() (tray menu / 编辑→退出), which sets _reallyExiting.
+        // If the tray icon could not be created, hiding would leave an unreachable
+        // ghost process, so fall back to a normal quit in that case.
+        if (!_reallyExiting && _trayIcon is not null)
+        {
+            e.Cancel = true;
+            Hide();
+            try
+            {
+                _trayIcon.ShowBalloon("启动项管理器", "已最小化到系统托盘，双击图标可恢复窗口。");
+            }
+            catch { /* tray may be unavailable on some systems */ }
+            return;
+        }
+        base.OnClosing(e);
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         _queueWatcher?.Dispose();
         _queueWatcher = null;
         _queueReloadTimer?.Stop();
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+        _hwndSource?.RemoveHook(TrayWndProc);
+        _hwndSource = null;
         base.OnClosed(e);
     }
 
@@ -144,7 +251,7 @@ public partial class MainWindow : Window
     }
 
     private void OnRefresh(object sender, RoutedEventArgs e) => _vm.Refresh();
-    private void OnExit(object sender, RoutedEventArgs e) => Close();
+    private void OnExit(object sender, RoutedEventArgs e) => ReallyExit();
     private void OnAbout(object sender, RoutedEventArgs e)
         => new AboutWindow { Owner = this }.ShowDialog();
 
@@ -423,7 +530,7 @@ public partial class MainWindow : Window
 
     // ---- queue item drag & drop reordering ----
 
-    private Point _dragStart;
+    private System.Windows.Point _dragStart;
     private int _dragFromIndex = -1;
 
     private void QueueGrid_OnPreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -459,19 +566,19 @@ public partial class MainWindow : Window
 
         DragDrop.DoDragDrop(QueueGrid,
             new DataObject(typeof(StartupManager.Core.Models.QueueItem), item),
-            DragDropEffects.Move);
+            System.Windows.DragDropEffects.Move);
         _dragFromIndex = -1;
     }
 
-    private void QueueGrid_OnDragOver(object sender, DragEventArgs e)
+    private void QueueGrid_OnDragOver(object sender, System.Windows.DragEventArgs e)
     {
         e.Effects = e.Data.GetDataPresent(typeof(StartupManager.Core.Models.QueueItem))
-            ? DragDropEffects.Move
-            : DragDropEffects.None;
+            ? System.Windows.DragDropEffects.Move
+            : System.Windows.DragDropEffects.None;
         e.Handled = true;
     }
 
-    private void QueueGrid_OnDrop(object sender, DragEventArgs e)
+    private void QueueGrid_OnDrop(object sender, System.Windows.DragEventArgs e)
     {
         if (!e.Data.GetDataPresent(typeof(StartupManager.Core.Models.QueueItem))) return;
 
