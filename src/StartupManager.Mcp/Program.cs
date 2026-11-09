@@ -28,7 +28,25 @@ public static class Program
 {
     private const string ServerName = "startup-manager";
     private const string ServerVersion = "1.0.0";
-    private const string ProtocolVersion = "2024-11-05";
+
+    /// <summary>
+    /// MCP protocol versions this server speaks. If a client requests one of these we
+    /// echo it back; otherwise we fall back to the newest version we support.
+    /// Covers the 2024 initial spec, the 2025-03 revision, the 2025-06 revision and
+    /// the 2025-11 revision used by newer clients.
+    /// </summary>
+    private static readonly string[] SupportedProtocolVersions =
+    {
+        "2024-11-05",
+        "2025-03-26",
+        "2025-06-18",
+        "2025-11-25",
+    };
+
+    private const string DefaultProtocolVersion = "2025-06-18";
+
+    /// <summary>Version agreed with the current client (set during initialize).</summary>
+    private static string _negotiatedVersion = DefaultProtocolVersion;
 
     private static StartupService _service = null!;
     private static StartupService Service => _service;
@@ -140,9 +158,14 @@ public static class Program
         {
             return method switch
             {
-                "initialize" => Result(id, InitializeResult()),
+                "initialize" => Result(id, InitializeResult(msg["params"] as JsonObject)),
                 "tools/list" => Result(id, ToolsListResult()),
                 "tools/call" => HandleToolCall(id, msg["params"] as JsonObject),
+                // Newer clients probe these even when unused; reply with empty lists
+                // so discovery succeeds instead of erroring out.
+                "resources/list" => Result(id, new JsonObject { ["resources"] = new JsonArray() }),
+                "resources/templates/list" => Result(id, new JsonObject { ["resourceTemplates"] = new JsonArray() }),
+                "prompts/list" => Result(id, new JsonObject { ["prompts"] = new JsonArray() }),
                 "ping" => Result(id, new JsonObject()),
                 _ => ErrorResponse(id, -32601, $"Method not found: {method}"),
             };
@@ -173,20 +196,55 @@ public static class Program
             },
         }.ToJsonString();
 
-    private static JsonObject InitializeResult()
-        => new()
+    /// <summary>
+    /// Return true when a string looks like an MCP date-based protocol version
+    /// (YYYY-MM-DD). Lets us interoperate with future clients (e.g. 2026 revisions)
+    /// whose exact version we do not know yet.
+    /// </summary>
+    private static bool LooksLikeProtocolVersion(string? v)
+        => !string.IsNullOrWhiteSpace(v)
+           && v!.Length == 10
+           && v[4] == '-'
+           && v[7] == '-'
+           && int.TryParse(v.AsSpan(0, 4), out _)
+           && int.TryParse(v.AsSpan(5, 2), out _)
+           && int.TryParse(v.AsSpan(8, 2), out _);
+
+    private static JsonObject InitializeResult(JsonObject? args)
+    {
+        // MCP negotiation: echo the client's requested version when we can serve it,
+        // otherwise fall back to our newest known version. Clients that omit the field
+        // get the 2024 baseline. A well-formed but unknown version (e.g. a future
+        // 2026 revision) is echoed too — the client already speaks that version, and
+        // our tool surface is version-independent.
+        var requested = args?["protocolVersion"]?.GetValue<string>();
+        _negotiatedVersion = string.IsNullOrWhiteSpace(requested)
+            ? "2024-11-05"
+            : (Array.IndexOf(SupportedProtocolVersions, requested) >= 0 || LooksLikeProtocolVersion(requested))
+                ? requested!
+                : DefaultProtocolVersion;
+
+        Console.Error.WriteLine(
+            $"[{ServerName}] initialize: requested='{requested ?? "(none)"}' -> '{_negotiatedVersion}'");
+
+        return new JsonObject
         {
-            ["protocolVersion"] = ProtocolVersion,
-            ["capabilities"] = new JsonObject
-            {
-                ["tools"] = new JsonObject { ["listChanged"] = false },
-            },
+            ["protocolVersion"] = _negotiatedVersion,
+            ["capabilities"] = Capabilities(),
             ["serverInfo"] = new JsonObject
             {
                 ["name"] = ServerName,
                 ["version"] = ServerVersion,
             },
         };
+    }
+
+    private static JsonObject Capabilities() => new()
+    {
+        ["tools"] = new JsonObject { ["listChanged"] = false },
+        ["resources"] = new JsonObject { ["listChanged"] = false },
+        ["prompts"] = new JsonObject { ["listChanged"] = false },
+    };
 
     // ---------- tool registry ----------
 
