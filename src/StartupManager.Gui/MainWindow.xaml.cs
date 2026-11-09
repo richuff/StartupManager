@@ -25,8 +25,9 @@ public partial class MainWindow : Window
         NavList.SelectedIndex = 0;
         StartupPage.Visibility = Visibility.Visible;
         DelayedPage.Visibility = Visibility.Collapsed;
-        PageIcon.Data = System.Windows.Media.Geometry.Parse(
-            "M3 4h14v2H3V4zm0 5h14v2H3V9zm0 5h14v2H3v-2z");
+
+        // Show the application icon in the top-left corner (decoded once in App).
+        AppIconImage.Source = App.AppIcon;
 
         _vm.Refresh();
         SetUpQueueWatcher();
@@ -140,13 +141,6 @@ public partial class MainWindow : Window
         StartupPage.Visibility = isStartup ? Visibility.Visible : Visibility.Collapsed;
         DelayedPage.Visibility = tag == "Delayed" ? Visibility.Visible : Visibility.Collapsed;
         QueuePage.Visibility = tag == "Queues" ? Visibility.Visible : Visibility.Collapsed;
-        PageIcon.Data = System.Windows.Media.Geometry.Parse(tag switch
-        {
-            // clock = delayed, stacked rows = queue, list = startup entries
-            "Delayed" => "M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3zm0 1v4l3 2 .9-1.5L9 8V4H8z",
-            "Queues" => "M3 3h12v3H3V3zm0 5h12v3H3V8zm0 5h12v3H3v-3z",
-            _ => "M3 4h14v2H3V4zm0 5h14v2H3V9zm0 5h14v2H3v-2z",
-        });
     }
 
     private void OnRefresh(object sender, RoutedEventArgs e) => _vm.Refresh();

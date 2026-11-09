@@ -10,6 +10,9 @@ public partial class App : Application
 {
     private static System.Windows.Media.ImageSource? _appIcon;
 
+    /// <summary>The app icon decoded once at startup; used for window icons and the top bar.</summary>
+    public static System.Windows.Media.ImageSource? AppIcon => _appIcon;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // Apply the branded icon to every window, including dialogs and prompts.

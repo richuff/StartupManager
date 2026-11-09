@@ -13,10 +13,9 @@
         <!-- top bar: left = app title (shows current page) + menus -->
         <Border DockPanel.Dock="Top" Background="{StaticResource Panel}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,6">
-                <Path x:Name="PageIcon" Width="20" Height="20" Stretch="Uniform"
-                      Fill="{StaticResource Primary}" VerticalAlignment="Center"
-                      Margin="14,0,14,0"
-                      Data="M3 4h14v2H3V4zm0 5h14v2H3V9zm0 5h14v2H3v-2z"/>
+                <Image x:Name="AppIconImage" Width="22" Height="22" Stretch="Uniform"
+                       VerticalAlignment="Center" Margin="12,0,14,0"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
                 <Menu Background="Transparent" BorderThickness="0">
                     <MenuItem Header="编辑">
                         <MenuItem Header="刷新" Tag="↻" Style="{StaticResource GlyphMenuItem}" Click="OnRefresh"/>
