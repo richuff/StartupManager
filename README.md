@@ -1,15 +1,36 @@
-# StartupManager — Windows 开机自启动管理器
+# StartupManager
 
-一个面向 Windows 的、零第三方依赖的开机自启动管理工具。原生 C# / .NET 10 + WPF，
-同时提供 **图形界面 (GUI)** 与 **命令行 (CLI)**。
+Windows 启动项与执行队列管理工具。原生 **C# / .NET 10 + WPF**，零第三方依赖，
+同时提供 **图形界面 (GUI)**、**命令行 (CLI)** 与 **MCP 服务端**（供 LLM 接入）。
 
 ## 功能
+
+### 启动项管理
 
 - 列出本机全部自启动项（跨多个位置统一展示）
 - 启用 / 禁用 / 删除已有启动项
 - 新增启动项到指定位置
-- **延迟启动**：统一管理「登录后等待 N 秒再启动」的程序，加快开机
-- 统计：总数、启用/禁用数、按位置分布、系统已运行时长
+- 每行显示程序的真实图标，状态用彩色徽标区分
+- 点击表头排序（再点一次切换升降序，带箭头指示）
+
+### 延迟启动
+
+统一管理「登录后等待 N 秒再启动」的程序，把开机负载错开：
+
+- 秒数从登录时刻起算，**各项互不累加**
+- 可开启「随登录自动启动延迟器」
+- 支持「立即启动一次」用于测试
+
+### 执行队列
+
+把多个程序编成一组，一键按各自延迟依次启动：
+
+- 多队列管理，配置持久化保存
+- **拖动行即可调整执行顺序**，也可右键上移/下移
+- 「执行过程」时间轴实时展示每一步状态（待执行 / 等待中 / 启动中 / 已启动 / 失败）
+- 按 exe 自动去重，避免同一程序重复出现在队列里
+- 右键「修改…」可编辑名称、命令、延迟、启用状态
+- 监听磁盘文件变化，外部修改（如 MCP 写入）会自动刷新
 
 ## 覆盖的启动位置
 
@@ -38,98 +59,61 @@ StartupManager.slnx
 ```
 
 核心库用纯 BCL + P/Invoke 实现：
-- 注册表：`Microsoft.Win32.Registry`（随 Windows Desktop 目标包，无需还原）
-- 快捷方式读写：`IShellLink` / `IPersistFile` COM 互操作（无需 NuGet）
-- 开机/运行时长：`Environment.TickCount64`（无需 EventLog）
+
+- 注册表：`Microsoft.Win32.Registry`
+- 启动文件夹快捷方式：COM `IShellLink` / `IPersistFile`（STA 线程）
+- 图标提取：`SHGetFileInfo`（不依赖 `System.Drawing.Common`，带缓存）
+- 进程身份诊断：`GetTokenInformation`（读取完整性级别 / UAC 提权类型）
 
 ## 构建
 
-需要 .NET 10 SDK（含 Windows Desktop 工作负载，离线即可，无需联网还原）。
-
-```bash
-dotnet build StartupManager.slnx
+```powershell
+dotnet build StartupManager.slnx -c Release
 ```
 
-## 使用
+## 打包发布
 
-### 命令行
-
-```bash
-# 列出全部启动项
-StartupManager.Cli list
-
-# 仅列出已禁用 / 仅已启用
-StartupManager.Cli list --disabled
-StartupManager.Cli list --enabled
-
-# 统计
-StartupManager.Cli stats
-
-# 启用 / 禁用 / 删除（同名项可用 --location 区分）
-StartupManager.Cli disable "OneDrive" --location CurrentUserRun
-StartupManager.Cli enable  "OneDrive" --location CurrentUserRun
-StartupManager.Cli remove  "OldApp"  --location CurrentUserRun
-
-# 新增启动项（--disabled 可加可不加；location 必填）
-StartupManager.Cli add "MyApp" "\"C:\Path\app.exe\" --minimized" --location CurrentUserRun
-
-# 延迟启动项的等待秒数
-StartupManager.Cli delay "MyApp" 60
-
-# 检查当前是否管理员
-StartupManager.Cli admin
+```powershell
+powershell -ExecutionPolicy Bypass -File .\publish.ps1
 ```
 
-### 图形界面
+默认输出到 `D:\StartupManager`，**自带 .NET 运行时**，目标机器无需安装任何依赖。
 
-直接运行 `StartupManager.Gui.exe`：
-- 「启动项」页：双击行切换启用/禁用；工具栏可启用/禁用/删除/添加
-- 「延迟启动」页：调整每项延迟秒数，点击「应用延迟改动」
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `-OutputDir` | `D:\StartupManager` | 发布目标目录 |
+| `-SingleFile` | 关 | 单文件模式（MCP 子进程场景不建议） |
+| `-NoClean` | 关 | 保留目标目录已有文件 |
+| `-SkipTests` | 关 | 跳过启动冒烟验证 |
 
-## 关于延迟启动的实现
+> 脚本每次都会先 `dotnet clean` 再发布，避免增量构建留下旧二进制。
 
-延迟启动完全由本工具自管理，**不依赖 Windows 任务计划程序**（离线环境无法引用
-`System.Diagnostics.EventLog` / 任务计划程序 COM 包）。做法是：
-本工具向当前用户 Run 注入一条自启动项 `StartupManagerDelayed`，
-登录后 `--delayed-launch` 无窗口模式启动，按各延迟项设定的秒数逐一等待后启动目标程序。
+## 注册为开机启动
 
-## 界面与图标
+```powershell
+# 注册（写入 HKCU\...\Run，无需管理员）
+powershell -ExecutionPolicy Bypass -File .\register-startup.ps1
 
-- 深色 Fluent 风格：深灰背景、蓝色强调色、圆角按钮、卡片化面板，所有样式集中在
-  `src/StartupManager.Gui/Themes/Modern.xaml`，便于统一调整。
-- 每行启动项**左侧显示该程序的真实图标**（通过 `SHGetFileInfo` P/Invoke 提取，
-  无需 `System.Drawing.Common` 包；带内存缓存）。
-- 「状态」列用绿色「已启用」/ 红色「已禁用」圆角徽标，一眼可辨。
-- 添加 / 删除 / 延迟管理等操作均有清晰的状态栏反馈与管理员权限提示。
+# 撤销
+powershell -ExecutionPolicy Bypass -File .\register-startup.ps1 -Remove
+```
 
-> 调试技巧：可用 `StartupManager.Gui.exe --render-preview <out.png>` 把主窗口
-> 离屏渲染成 PNG（不需要桌面会话），用于验证样式与图标。注意在无桌面会话的沙箱中，
-> 该 PNG 可能只渲染出背景色（虚拟化的数据行在无活动 PresentationSource 时不会被生成），
-> 真实桌面环境下方可看到完整表格内容。
-
-## 范围说明（本期未含）
-
-计划任务、系统服务、驱动级自启动属于「完整档」功能，本期未实现；如需，可在
-`StartupService` 中新增对应的 `IStartupProvider`（计划任务需引入 COM `TaskScheduler`，
-服务需 `ServiceController`，均建议联网还原相关包后扩展）。
-
-## 权限提示
-
-- 修改 `HKLM` 与「所有用户启动文件夹」需要**管理员身份**运行。
-- 修改被拒绝时，程序会给出明确的「没有权限…请以管理员身份运行」提示，不会崩溃。
+脚本还会把延迟启动器（`--delayed-launch`）的路径校正为当前发布位置，
+避免它指向已被删除的旧输出目录。
 
 ## MCP 服务端（LLM 接入）
 
-`src/StartupManager.Mcp` 把本工具的核心能力暴露为标准 **MCP (Model Context Protocol)**
-服务端，采用 JSON-RPC 2.0 over **stdio**，零第三方依赖（不引入官方 SDK 也能离线构建），
-任何支持 MCP 的 LLM 客户端都可接入并直接操作启动项与执行队列。
+`src/StartupManager.Mcp` 把核心能力暴露为标准 **MCP (Model Context Protocol)** 服务端，
+采用 **JSON-RPC 2.0 over stdio**，零第三方依赖，任何支持 MCP 的客户端都可接入。
 
 ### 运行
 
 ```powershell
-StartupManager.Mcp.exe                 # 使用默认 %LocalAppData% 队列清单
-StartupManager.Mcp.exe --store <path>  # 指定队列清单路径（便于便携/测试）
-StartupManager.Mcp.exe --version       # 打印版本
+StartupManager.Mcp.exe                    # 使用默认 %LocalAppData% 队列清单
+StartupManager.Mcp.exe --store <path>     # 指定队列清单路径
+StartupManager.Mcp.exe --direct-write     # 直接覆盖写，不建临时文件
+StartupManager.Mcp.exe --whoami           # 打印进程身份（用户/完整性级别）
+StartupManager.Mcp.exe --version          # 打印版本
 ```
 
 stdout 只输出协议帧（每行一个 JSON 对象），诊断信息走 stderr。
@@ -160,7 +144,7 @@ stdout 只输出协议帧（每行一个 JSON 对象），诊断信息走 stderr
 | `add_queue_item` | 向队列添加应用（按 exe 去重） |
 | `update_queue_item` | 修改队列项的启用/延迟 |
 | `remove_queue_item` | 从队列删除应用 |
-| `start_queue` | 一键启动队列（后台按延迟依次启动） |
+| `start_queue` | 一键启动队列，返回执行计划 |
 
 ### 客户端配置示例
 
@@ -168,13 +152,50 @@ stdout 只输出协议帧（每行一个 JSON 对象），诊断信息走 stderr
 {
   "mcpServers": {
     "startup-manager": {
-      "command": "D:\\path\\to\\StartupManager.Mcp.exe",
+      "command": "D:\\StartupManager\\StartupManager.Mcp.exe",
       "args": []
     }
   }
 }
 ```
 
-> 与 GUI 一样，修改 `HKLM` / 公共启动文件夹需要管理员权限；无权限时工具调用会返回
-> `isError: true` 并附带中文原因，而不是让服务端崩溃。
+## 数据位置
 
+| 内容 | 路径 |
+| --- | --- |
+| 执行队列 | `%LOCALAPPDATA%\StartupManager\Queues\queues.json` |
+| 延迟启动清单 | `%LOCALAPPDATA%\StartupManager\Delayed\manifest.json` |
+
+写盘策略：默认在 `%TEMP%` 建临时文件后原子替换，失败时降级为就地覆盖；
+失败会带上 **异常类型与 Win32 错误码**（`5`=权限、`32/33`=被占用），不会静默丢数据。
+
+## 界面
+
+- 左侧图标导航：启动项 / 延迟启动项 / 执行队列
+- 顶栏显示当前页签，菜单：编辑 / 设置（MCP 服务、打开数据目录）/ 关于
+- 列表支持点击表头排序、右键操作、拖动调整队列顺序
+- 添加、关于、MCP 等弹窗为 Electron 风格（无边框圆角 + 阴影）
+
+## 权限与签名
+
+- 修改 `HKCU` 与用户启动文件夹**不需要管理员权限**；`HKLM` 与公共启动文件夹才需要。
+- 未签名的 exe 会显示「未知的发行商」，需代码签名证书才能消除：
+
+```powershell
+# 自签名（仅本机有效）
+powershell -ExecutionPolicy Bypass -File .\sign.ps1 -SelfSigned -TrustCert
+
+# 正式证书（分发用）
+powershell -ExecutionPolicy Bypass -File .\sign.ps1 -PfxPath <cert.pfx> -PfxPassword <pwd>
+```
+
+- 进程需运行在**中等完整性**级别才能写用户目录；若以低完整性（如某些沙箱）启动，
+  写盘会返回 `Win32=5`。可用 `--whoami` 查看当前进程的完整性级别。
+
+## 范围说明（本期未含）
+
+计划任务、系统服务、驱动级自启动属于「完整档」功能，本期未实现；如需，可在
+`StartupService` 中新增对应的 `IStartupProvider`（计划任务需引入 COM `TaskScheduler`，
+服务需 `ServiceController`，均建议联网还原相关包后扩展）。
+
+详见 [DEPLOY.md](DEPLOY.md)。
