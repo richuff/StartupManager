@@ -1,0 +1,117 @@
+<Window x:Class="StartupManager.Gui.McpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MCP 服务" Width="720" SizeToContent="Height" WindowStartupLocation="CenterOwner"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" FontFamily="Microsoft YaHei" FontSize="13">
+    <Border Background="White" CornerRadius="12" BorderBrush="#E5E6EB" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="0" Opacity="0.28" Color="#1F2329"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- title bar -->
+            <Border Grid.Row="0" Background="#F7F8FA" CornerRadius="12,12,0,0"
+                    BorderBrush="#E5E6EB" BorderThickness="0,0,0,1"
+                    MouseLeftButtonDown="OnDrag">
+                <Grid>
+                    <TextBlock Text="MCP 服务" FontWeight="SemiBold" Foreground="#1F2329"
+                               VerticalAlignment="Center" Margin="16,0"/>
+                    <Button Content="✕" Width="32" Height="32" HorizontalAlignment="Right"
+                            Background="Transparent" BorderThickness="0" Foreground="#8F959E"
+                            FontSize="14" Cursor="Hand" Click="OnClose">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" CornerRadius="6">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#FFECEC"/>
+                                                    <Setter Property="Foreground" Value="#F53F3F"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Row="1" Margin="20,16,20,20">
+                <TextBlock TextWrapping="Wrap" Foreground="#4E5969" Margin="0,0,0,12">
+                    本程序内置 MCP（Model Context Protocol）服务端，采用 JSON-RPC 2.0 over stdio，
+                    可让 LLM 客户端直接查询与操作启动项、延迟启动与执行队列。
+                </TextBlock>
+
+                <TextBlock Text="状态" FontWeight="SemiBold" Foreground="#1F2329" Margin="0,0,0,6"/>
+                <Border Background="#F7F8FA" CornerRadius="8" Padding="12" Margin="0,0,0,14"
+                        BorderBrush="#E5E6EB" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock x:Name="StatusText" Foreground="#1F2329" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="客户端配置（复制到 MCP 客户端）" FontWeight="SemiBold" Foreground="#1F2329" Margin="0,0,0,6"/>
+                <Border Background="#F7F8FA" CornerRadius="8" Padding="12" Margin="0,0,0,8"
+                        BorderBrush="#E5E6EB" BorderThickness="1">
+                    <TextBox x:Name="ConfigBox" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                             FontFamily="Consolas" FontSize="12" Foreground="#1F2329"
+                             TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" MaxHeight="120"/>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                    <Button Content="复制配置" Width="100" Padding="10,7" Cursor="Hand" Click="OnCopyConfig"
+                            Background="#4D6BFE" BorderThickness="0" Foreground="White">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" CornerRadius="8">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                  Margin="{TemplateBinding Padding}"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="打开程序目录" Width="120" Margin="8,0,0,0" Padding="10,7" Cursor="Hand"
+                            Background="White" BorderBrush="#E5E6EB" BorderThickness="1" Foreground="#1F2329"
+                            Click="OnOpenExeDir"/>
+                    <Button Content="打开数据目录" Width="120" Margin="8,0,0,0" Padding="10,7" Cursor="Hand"
+                            Background="White" BorderBrush="#E5E6EB" BorderThickness="1" Foreground="#1F2329"
+                            Click="OnOpenDataDir"/>
+                </StackPanel>
+
+                <TextBlock Text="可用工具（18 个）" FontWeight="SemiBold" Foreground="#1F2329" Margin="0,0,0,6"/>
+                <Border Background="#F7F8FA" CornerRadius="8" Padding="12" BorderBrush="#E5E6EB" BorderThickness="1">
+                    <ListBox x:Name="ToolList" Background="Transparent" BorderThickness="0"
+                             MaxHeight="180" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,3">
+                                    <TextBlock Text="{Binding Name}" FontFamily="Consolas" FontSize="12"
+                                               Foreground="#4D6BFE" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding Description}" Foreground="#8F959E"
+                                               FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

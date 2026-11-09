@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>StartupManager.Gui</RootNamespace>
+    <AssemblyName>StartupManager.Gui</AssemblyName>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Assembly metadata shown in Explorer / Task Manager / SmartScreen.
+         A signed certificate is still required for "发行商" to be non-unknown. -->
+    <Product>StartupManager</Product>
+    <AssemblyTitle>启动项管理器</AssemblyTitle>
+    <Description>Windows 启动项与执行队列管理工具</Description>
+    <Company>StartupManager</Company>
+    <Copyright>Copyright © 2026</Copyright>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <NeutralLanguage>zh-CN</NeutralLanguage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\StartupManager.Core\StartupManager.Core.csproj" />
+    <!-- Build the MCP server alongside the GUI so `dotnet build` output includes it.
+         `dotnet publish` copies MCP separately (see publish.ps1). -->
+    <ProjectReference Include="..\StartupManager.Mcp\StartupManager.Mcp.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+  </ItemGroup>
+
+</Project>

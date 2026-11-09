@@ -1,0 +1,23 @@
+<Application x:Class="StartupManager.Gui.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Modern.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <!-- unified font + grayscale rendering so text weight looks consistent everywhere -->
+            <Style TargetType="Control">
+                <Setter Property="FontFamily" Value="Microsoft YaHei"/>
+                <Setter Property="TextOptions.TextRenderingMode" Value="Grayscale"/>
+                <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            </Style>
+            <Style TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Microsoft YaHei"/>
+                <Setter Property="TextOptions.TextRenderingMode" Value="Grayscale"/>
+                <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
