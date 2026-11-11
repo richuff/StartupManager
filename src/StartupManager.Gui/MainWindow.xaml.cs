@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -254,92 +254,82 @@ public partial class MainWindow : Window
     // ---- recorded MCP servers page ----
 
     private void McpServerList_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
-        => LoadMcpEditor(_vm.SelectedMcpServer);
+        => ShowMcpDetail(_vm.SelectedMcpServer);
 
-    private void OnAddMcpServer(object sender, RoutedEventArgs e)
-    {
-        McpServerList.SelectedItem = null;
-        LoadMcpEditor(null);
-        McpEditorTitle.Text = "新建 MCP 服务记录";
-        McpHint.Text = "";
-        McpNameBox.Focus();
-    }
-
-    /// <summary>Fill the editor from a record, or blank it for a new one.</summary>
-    private void LoadMcpEditor(McpServerEntry? entry)
+    /// <summary>Show the read-only detail of the selected record in the right pane.</summary>
+    private void ShowMcpDetail(McpServerEntry? entry)
     {
         if (entry is null)
         {
             McpEditorTitle.Text = "MCP 服务记录";
-            McpNameBox.Text = "";
-            McpDescBox.Text = "";
-            McpCommandBox.Text = "";
+            McpDescText.Text = "";
+            McpCommandText.Text = "";
             McpConfigBox.Text = "";
-            McpHint.Text = "";
             return;
         }
 
-        McpEditorTitle.Text = $"编辑：{entry.Name}";
-        McpNameBox.Text = entry.Name;
-        McpDescBox.Text = entry.Description;
-        McpCommandBox.Text = entry.Command;
+        McpEditorTitle.Text = entry.Name;
+        McpDescText.Text = string.IsNullOrWhiteSpace(entry.Description) ? "（无描述）" : entry.Description;
+        McpCommandText.Text = string.IsNullOrWhiteSpace(entry.Command) ? "（未填写）" : entry.Command;
         McpConfigBox.Text = entry.ConfigJson;
-        McpHint.Text = "";
     }
 
-    private void OnSaveMcpServer(object sender, RoutedEventArgs e)
+    private void OnAddMcpServer(object sender, RoutedEventArgs e)
     {
-        var name = McpNameBox.Text.Trim();
-        var desc = McpDescBox.Text.Trim();
-        var cmd = McpCommandBox.Text.Trim();
-        var cfg = McpConfigBox.Text;
+        var dlg = new EditMcpServerWindow { Owner = this };
+        if (dlg.ShowDialog() != true) return;
 
-        var selected = _vm.SelectedMcpServer;
-        var error = selected is null
-            ? _vm.AddMcpServer(name, desc, cmd, cfg)
-            : _vm.SaveMcpServer(selected, name, desc, cmd, cfg);
-
+        var error = _vm.AddMcpServer(dlg.ServerName, dlg.Description, dlg.Command, dlg.ConfigJson);
         if (error is not null)
         {
-            McpHint.Text = error;
             MessageBox.Show(error, "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (selected is null) McpServerList.SelectedItem = _vm.SelectedMcpServer;
-        LoadMcpEditor(_vm.SelectedMcpServer);
-        McpHint.Text = "已保存。";
+        McpServerList.SelectedItem = _vm.SelectedMcpServer;
+        ShowMcpDetail(_vm.SelectedMcpServer);
+    }
+
+    private void OnEditMcpServer(object sender, RoutedEventArgs e)
+    {
+        var selected = _vm.SelectedMcpServer;
+        if (selected is null) return;
+
+        var dlg = new EditMcpServerWindow(selected) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+
+        var error = _vm.SaveMcpServer(selected, dlg.ServerName, dlg.Description, dlg.Command, dlg.ConfigJson);
+        if (error is not null)
+        {
+            MessageBox.Show(error, "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        ShowMcpDetail(selected);
     }
 
     private void OnRemoveMcpServer(object sender, RoutedEventArgs e)
     {
         var selected = _vm.SelectedMcpServer;
-        if (selected is null) { McpHint.Text = "请先选择一条记录。"; return; }
+        if (selected is null) return;
 
         if (MessageBox.Show($"确定删除 MCP 服务记录「{selected.Name}」？", "删除记录",
                 MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return;
 
         _vm.RemoveMcpServer(selected);
-        LoadMcpEditor(_vm.SelectedMcpServer);
-        McpHint.Text = "已删除。";
+        ShowMcpDetail(_vm.SelectedMcpServer);
     }
 
     private void OnCopyMcpConfig(object sender, RoutedEventArgs e)
     {
-        var text = McpConfigBox.Text;
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            text = McpCommandBox.Text.Trim().Length == 0
-                ? ""
-                : new McpServerEntry
-                  {
-                      Name = McpNameBox.Text.Trim(),
-                      Command = McpCommandBox.Text.Trim(),
-                  }.BuildConfigFromCommand();
-        }
+        var selected = _vm.SelectedMcpServer;
+        var text = selected?.ConfigJson;
+        if (string.IsNullOrWhiteSpace(text) && selected is not null)
+            text = new McpServerEntry { Name = selected.Name, Command = selected.Command }
+                .BuildConfigFromCommand();
 
-        if (string.IsNullOrWhiteSpace(text)) { McpHint.Text = "没有可复制的配置。"; return; }
+        if (string.IsNullOrWhiteSpace(text)) return;
 
         try
         {
@@ -351,36 +341,6 @@ public partial class MainWindow : Window
             MessageBox.Show(ex.Message, "复制失败", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
-
-    private void OnGenerateMcpConfig(object sender, RoutedEventArgs e)
-    {
-        var cmd = McpCommandBox.Text.Trim();
-        if (cmd.Length == 0) { McpHint.Text = "请先填写命令 / 路径。"; return; }
-
-        McpConfigBox.Text = new McpServerEntry
-        {
-            Name = McpNameBox.Text.Trim(),
-            Command = cmd,
-        }.BuildConfigFromCommand();
-        McpHint.Text = "已根据命令生成配置。";
-    }
-
-    private void OnBrowseMcpCommand(object sender, RoutedEventArgs e)
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title = "选择 MCP 服务端可执行文件",
-            Filter = "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*",
-        };
-        if (dlg.ShowDialog(this) == true)
-        {
-            McpCommandBox.Text = dlg.FileName;
-            if (string.IsNullOrWhiteSpace(McpNameBox.Text))
-                McpNameBox.Text = Path.GetFileNameWithoutExtension(dlg.FileName);
-            OnGenerateMcpConfig(sender, e);
-        }
-    }
-
     private void OnRefresh(object sender, RoutedEventArgs e) => _vm.Refresh();
     private void OnExit(object sender, RoutedEventArgs e) => ReallyExit();
     private void OnAbout(object sender, RoutedEventArgs e)

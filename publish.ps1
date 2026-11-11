@@ -21,6 +21,10 @@
 .EXAMPLE
     .\publish.ps1
     .\publish.ps1 -OutputDir 'D:\StartupManager' -SingleFile
+
+.NOTES
+    受限环境可用环境变量追加 MSBuild 参数：
+        $env:SM_EXTRA_BUILD_ARGS = '-m:1 -nodeReuse:false'
 #>
 [CmdletBinding()]
 param(
@@ -37,6 +41,13 @@ $repoRoot   = $PSScriptRoot
 $guiProject = Join-Path $repoRoot 'src\StartupManager.Gui\StartupManager.Gui.csproj'
 $solution   = Join-Path $repoRoot 'StartupManager.slnx'
 $appExeName = 'StartupManager.Gui.exe'
+
+# 额外 MSBuild 参数，供受限环境（单节点构建、禁用节点复用）复用本脚本。
+# 例：$env:SM_EXTRA_BUILD_ARGS = '-m:1 -nodeReuse:false'
+$extraBuildArgs = @()
+if ($env:SM_EXTRA_BUILD_ARGS) {
+    $extraBuildArgs = @($env:SM_EXTRA_BUILD_ARGS -split '\s+' | Where-Object { $_ })
+}
 
 function Write-Step([string]$Message) {
     Write-Host ''
@@ -76,7 +87,7 @@ if ($running) {
 # ---------------------------------------------------------------- build
 Write-Step '编译整个解决方案（Release）'
 
-& dotnet build $solution -c Release --nologo -v minimal
+& dotnet build $solution -c Release --nologo -v minimal @extraBuildArgs
 if ($LASTEXITCODE -ne 0) { throw "编译失败（退出码 $LASTEXITCODE）。" }
 
 # ---------------------------------------------------------------- publish
@@ -97,12 +108,12 @@ $publishArgs = @(
     '-o', $OutputDir,
     '--nologo',
     '-v', 'minimal'
-)
+) + $extraBuildArgs
 
 Write-Host "  dotnet $($publishArgs -join ' ')"
 
 # Clean the GUI project too so no stale assembly from an older build survives.
-& dotnet clean $guiProject -c Release -v quiet 2>&1 | Out-Null
+& dotnet clean $guiProject -c Release -v quiet @extraBuildArgs 2>&1 | Out-Null
 
 & dotnet @publishArgs
 if ($LASTEXITCODE -ne 0) { throw "发布失败（退出码 $LASTEXITCODE）。" }
@@ -131,10 +142,10 @@ $mcpTmp = Join-Path $env:TEMP ('sm-mcp-' + [Guid]::NewGuid().ToString('N'))
 try {
     # Clean first: incremental publish can keep a stale MCP binary that no longer
     # matches the sources, silently shipping fixes that never took effect.
-    & dotnet clean $mcpProject -c Release -v quiet 2>&1 | Out-Null
+    & dotnet clean $mcpProject -c Release -v quiet @extraBuildArgs 2>&1 | Out-Null
     & dotnet publish $mcpProject -c Release -r win-x64 --self-contained true `
         -p:PublishSingleFile=false -p:DebugType=none -p:DebugSymbols=false `
-        -o $mcpTmp --nologo -v minimal
+        -o $mcpTmp --nologo -v minimal @extraBuildArgs
     if ($LASTEXITCODE -ne 0) { throw 'MCP 服务端发布失败。' }
 
     # Copy only the MCP payload; its runtime .dlls are already in the GUI drop.
