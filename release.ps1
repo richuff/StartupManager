@@ -62,6 +62,7 @@ $env:MSBuildDisableNodeReuse = '1'
 if (-not $env:SM_EXTRA_BUILD_ARGS) {
     $env:SM_EXTRA_BUILD_ARGS = '-m:1 -nodeReuse:false'
 }
+$extraBuildArgs = @($env:SM_EXTRA_BUILD_ARGS -split '\s+' | Where-Object { $_ })
 
 function Write-Step([string]$Text) {
     Write-Host ''
@@ -80,6 +81,24 @@ function Assert-Path([string]$Path, [string]$What) {
     if (-not (Test-Path -LiteralPath $Path)) { throw "$What 不存在：$Path" }
 }
 
+# git 会把换行规范化之类的提示写到 stderr。默认的 Stop 策略下这些提示
+# 会被当成终止错误，所以调用 git 时降级为 Continue 并把输出收进对象里。
+function Invoke-Git([string[]]$GitArgs) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & git @GitArgs 2>&1
+        $code = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previous
+    }
+    return [pscustomobject]@{
+        Code   = $code
+        Output = @($output | ForEach-Object { "$_" })
+    }
+}
+
 # ---------------------------------------------------------------- 0. 预检
 Write-Step '检查仓库状态'
 
@@ -88,13 +107,18 @@ Assert-Path $publishScript 'publish.ps1'
 
 Push-Location $repoRoot
 try {
-    $branch = (& git rev-parse --abbrev-ref HEAD).Trim()
-    if ($LASTEXITCODE -ne 0) { throw '不是有效的 git 仓库。' }
+    $branchResult = Invoke-Git @('rev-parse', '--abbrev-ref', 'HEAD')
+    if ($branchResult.Code -ne 0) { throw '不是有效的 git 仓库。' }
+    $branch = ($branchResult.Output | Select-Object -First 1).Trim()
+
     Write-Host "  分支     : $branch"
     Write-Host "  发布目录 : $OutputDir"
 
-    $dirty = (& git status --porcelain)
-    $hasChanges = [bool]($dirty -and $dirty.Count -gt 0)
+    $statusResult = Invoke-Git @('status', '--porcelain')
+    if ($statusResult.Code -ne 0) { throw 'git status 执行失败。' }
+    $dirty = @($statusResult.Output | Where-Object { $_ })
+    $hasChanges = $dirty.Count -gt 0
+
     if ($hasChanges) {
         Write-Host '  未提交改动：'
         $dirty | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
@@ -109,7 +133,7 @@ try {
     }
     else {
         Write-Step '编译整个解决方案（Release）'
-        & dotnet build $solution -c Release --nologo -v minimal @($env:SM_EXTRA_BUILD_ARGS -split '\s+' | Where-Object { $_ })
+        & dotnet build $solution -c Release --nologo -v minimal @extraBuildArgs
         if ($LASTEXITCODE -ne 0) { throw "编译失败（退出码 $LASTEXITCODE），已中止，未提交。" }
         Write-Ok '编译通过'
 
@@ -120,10 +144,8 @@ try {
         & $publishScript @publishArgs
         if (-not $?) { throw '打包失败，已中止，未提交。' }
 
-        $exe = Join-Path $OutputDir 'StartupManager.Gui.exe'
-        $mcp = Join-Path $OutputDir 'StartupManager.Mcp.exe'
-        Assert-Path $exe '发布后的主程序'
-        Assert-Path $mcp '发布后的 MCP 服务端'
+        Assert-Path (Join-Path $OutputDir 'StartupManager.Gui.exe') '发布后的主程序'
+        Assert-Path (Join-Path $OutputDir 'StartupManager.Mcp.exe') '发布后的 MCP 服务端'
         Write-Ok "打包完成：$OutputDir"
     }
 
@@ -146,19 +168,19 @@ try {
             $Message = 'chore: 发布 ' + (Get-Date -Format 'yyyy-MM-dd HH:mm')
         }
 
-        & git add -A
-        if ($LASTEXITCODE -ne 0) { throw 'git add 失败。' }
-
-        if ($AllowEmpty) {
-            & git commit --allow-empty -m $Message | Out-Null
+        $addResult = Invoke-Git @('add', '-A')
+        if ($addResult.Code -ne 0) {
+            throw "git add 失败：$($addResult.Output -join ' ')"
         }
-        else {
-            & git commit -m $Message | Out-Null
-        }
-        if ($LASTEXITCODE -ne 0) { throw 'git commit 失败（可能没有实际改动）。' }
 
-        $head = (& git log -1 --format='%h %s').Trim()
-        Write-Ok "已提交 $head"
+        $commitArgs = if ($AllowEmpty) { @('commit', '--allow-empty', '-m', $Message) } else { @('commit', '-m', $Message) }
+        $commitResult = Invoke-Git $commitArgs
+        if ($commitResult.Code -ne 0) {
+            throw "git commit 失败：$($commitResult.Output -join ' ')"
+        }
+
+        $headResult = Invoke-Git @('log', '-1', '--format=%h %s')
+        Write-Ok "已提交 $(($headResult.Output | Select-Object -First 1).Trim())"
     }
 
     # ------------------------------------------------------------ 4. 推送
@@ -171,33 +193,45 @@ try {
         $env:GIT_TERMINAL_PROMPT = '0'
 
         # 优先直连；失败时用凭据文件里的 token 走显式请求头（绕过 credential helper）。
-        & git push origin $branch
-        if ($LASTEXITCODE -ne 0) {
+        $pushResult = Invoke-Git @('push', 'origin', $branch)
+        if ($pushResult.Code -ne 0) {
             Write-Host '  直连推送失败，改用 token 显式鉴权重试…' -ForegroundColor Yellow
 
             $token = $null
             $credFile = Join-Path $env:USERPROFILE '.git-credentials'
             if (Test-Path -LiteralPath $credFile) {
-                foreach ($line in Get-Content -LiteralPath $credFile) {
-                    if ($line -match '^https://([^:]+):([^@]+)@github\.com') {
-                        $token = $Matches[2]
-                        break
+                $previous = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                try {
+                    foreach ($line in Get-Content -LiteralPath $credFile) {
+                        if ($line -match '^https://([^:]+):([^@]+)@github\.com') {
+                            $token = $Matches[2]
+                            break
+                        }
                     }
+                }
+                finally {
+                    $ErrorActionPreference = $previous
                 }
             }
             if (-not $token) { throw '推送失败，且未在 .git-credentials 中找到 GitHub token。' }
 
             $pair = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$token"))
-            & git -c credential.helper= -c "http.extraHeader=AUTHORIZATION: basic $pair" push origin $branch
-            if ($LASTEXITCODE -ne 0) { throw '推送失败。' }
+            $pushResult = Invoke-Git @('-c', 'credential.helper=', '-c', "http.extraHeader=AUTHORIZATION: basic $pair", 'push', 'origin', $branch)
+            if ($pushResult.Code -ne 0) {
+                throw "推送失败：$($pushResult.Output -join ' ')"
+            }
         }
         Write-Ok "已推送到 origin/$branch"
     }
 
     # ------------------------------------------------------------ 汇总
     Write-Step '完成'
-    Write-Host ("  HEAD   : " + (& git log -1 --format='%h %s').Trim())
-    if (& git status --porcelain) {
+    $headResult = Invoke-Git @('log', '-1', '--format=%h %s')
+    Write-Host "  HEAD   : $(($headResult.Output | Select-Object -First 1).Trim())"
+
+    $finalStatus = Invoke-Git @('status', '--porcelain')
+    if (@($finalStatus.Output | Where-Object { $_ }).Count -gt 0) {
         Write-Host '  注意   : 仍有未提交/未跟踪文件（可能被 .gitignore 排除）' -ForegroundColor Yellow
     }
     else {
