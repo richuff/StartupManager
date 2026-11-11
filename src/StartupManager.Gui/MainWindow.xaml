@@ -17,18 +17,18 @@
                        VerticalAlignment="Center" Margin="12,0,14,0"
                        RenderOptions.BitmapScalingMode="HighQuality"/>
                 <Menu Background="Transparent" BorderThickness="0">
-                    <MenuItem Header="编辑">
+                    <!-- Order: 编辑 / 设置 / 关于 / 退出. Keep every Click handler as-is. -->
+                    <MenuItem Header="编辑" Style="{StaticResource MenuRootItem}">
                         <MenuItem Header="刷新" Tag="↻" Style="{StaticResource GlyphMenuItem}" Click="OnRefresh"/>
                         <MenuItem Header="新建启动项" Tag="＋" Style="{StaticResource GlyphMenuItem}" Click="OnAdd"/>
-                        <Separator Style="{StaticResource MenuSeparator}"/>
-                        <MenuItem Header="退出程序" Tag="✕" Style="{StaticResource GlyphMenuItem}" Click="OnExit"/>
                     </MenuItem>
-                    <MenuItem Header="设置">
+                    <MenuItem Header="设置" Style="{StaticResource MenuRootItem}">
                         <MenuItem Header="MCP 服务…" Tag="⚙" Style="{StaticResource GlyphMenuItem}" Click="OnShowMcp"/>
                         <Separator Style="{StaticResource MenuSeparator}"/>
                         <MenuItem Header="打开数据目录" Tag="📁" Style="{StaticResource GlyphMenuItem}" Click="OnOpenDataDir"/>
                     </MenuItem>
-                    <MenuItem Header="关于" Tag="ℹ" Style="{StaticResource GlyphMenuItem}" Click="OnAbout"/>
+                    <MenuItem Header="关于" Tag="ℹ" Style="{StaticResource MenuRootItem}" Click="OnAbout"/>
+                    <MenuItem Header="退出" Tag="✕" Style="{StaticResource MenuRootItem}" Click="OnExit"/>
                 </Menu>
             </StackPanel>
         </Border>
