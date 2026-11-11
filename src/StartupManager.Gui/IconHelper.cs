@@ -17,11 +17,11 @@ namespace StartupManager.Gui;
 /// </summary>
 public class FilePathToIconConverter : IValueConverter
 {
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         var path = value as string;
-        if (string.IsNullOrWhiteSpace(path)) return null;
-        return ShellIcon.GetSmallIcon(path);
+        if (string.IsNullOrWhiteSpace(path)) return DefaultAppIcon.Image;
+        return ShellIcon.GetSmallIcon(path) ?? DefaultAppIcon.Image;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -31,16 +31,19 @@ public class FilePathToIconConverter : IValueConverter
 /// <summary>
 /// WPF value converter: maps a command line to the icon of its executable.
 /// Used by the execution-queue grid, whose rows expose a Command string only.
+/// When no real icon can be found (missing exe, unparseable command, or a shell
+/// error), it returns a drawn placeholder instead of leaving the cell blank or
+/// showing the system's white blank-document icon.
 /// </summary>
 public class CommandToIconConverter : IValueConverter
 {
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         var cmd = value as string;
-        if (string.IsNullOrWhiteSpace(cmd)) return null;
+        if (string.IsNullOrWhiteSpace(cmd)) return DefaultAppIcon.Image;
         var (exe, _) = StartupEntry.SplitCommandLine(cmd);
-        if (exe is null) return null;
-        return ShellIcon.GetSmallIcon(exe);
+        if (exe is null) return DefaultAppIcon.Image;
+        return ShellIcon.GetSmallIcon(exe) ?? DefaultAppIcon.Image;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -67,7 +70,6 @@ internal static class ShellIcon
 
     private const uint SHGFI_ICON = 0x000000100;
     private const uint SHGFI_SMALLICON = 0x000000001;
-    private const uint SHGFI_USEFILEATTRIBUTES = 0x000000010;
 
     [DllImport("shell32.dll", CharSet = CharSet.Auto)]
     private static extern IntPtr SHGetFileInfo(
@@ -89,18 +91,23 @@ internal static class ShellIcon
         ImageSource? result = null;
         try
         {
-            var fi = new SHFILEINFO();
-            var flags = SHGFI_ICON | SHGFI_SMALLICON;
-            if (!System.IO.File.Exists(path))
-                flags |= SHGFI_USEFILEATTRIBUTES; // generic icon for missing files
-            SHGetFileInfo(path, 0, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), flags);
-            if (fi.hIcon != IntPtr.Zero)
+            // Only ask the shell for a *real* associated icon. For missing files or
+            // unknown types SHGFI_USEFILEATTRIBUTES would hand back the generic blank
+            // white document icon, which is exactly what we want to avoid — return
+            // null instead so callers can show the drawn application placeholder.
+            if (System.IO.File.Exists(path))
             {
-                var bs = Imaging.CreateBitmapSourceFromHIcon(
-                    fi.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                bs.Freeze();
-                result = bs;
-                DestroyIcon(fi.hIcon);
+                var fi = new SHFILEINFO();
+                const uint flags = SHGFI_ICON | SHGFI_SMALLICON;
+                SHGetFileInfo(path, 0, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), flags);
+                if (fi.hIcon != IntPtr.Zero)
+                {
+                    var bs = Imaging.CreateBitmapSourceFromHIcon(
+                        fi.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                    bs.Freeze();
+                    result = bs;
+                    DestroyIcon(fi.hIcon);
+                }
             }
         }
         catch
