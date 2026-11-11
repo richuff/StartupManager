@@ -8,6 +8,15 @@ namespace StartupManager.Gui;
 
 public partial class App : System.Windows.Application
 {
+    /// <summary>Session-wide ownership so only one GUI process is ever alive.
+    /// A second launch signals <see cref="_activation"/> and quits instead of opening a window.</summary>
+    private const string SingleInstanceName = @"Local\StartupManager.Gui.SingleInstance";
+    private const string ActivateName = @"Local\StartupManager.Gui.Activate";
+
+    private static Mutex? _singleInstance;
+    private static EventWaitHandle? _activation;
+    private static System.Windows.Threading.DispatcherTimer? _activationTimer;
+
     private static System.Windows.Media.ImageSource? _appIcon;
 
     /// <summary>The app icon decoded once at startup; used for window icons and the top bar.</summary>
@@ -75,7 +84,70 @@ public partial class App : System.Windows.Application
             }
         }
 
+        // Interactive GUI path: only one alive process per session is allowed.
+        // A second launch pings the owner and quits instead of opening another window.
+        if (!ClaimSingleInstance())
+        {
+            SignalActivation();
+            // Shutdown() is asynchronous and StartupUri would still flash the main
+            // window; exit hard so the second launch disappears without a UI.
+            Environment.Exit(0);
+            return;
+        }
+        StartActivationWatch();
+
         base.OnStartup(e);
+    }
+
+    /// <summary>Take session-wide ownership of the GUI. The <see cref="_singleInstance"/>
+    /// mutex stays referenced for the process lifetime so the OS keeps it alive.</summary>
+    /// <returns>true only in the process permitted to show the main window.</returns>
+    private static bool ClaimSingleInstance()
+    {
+        _singleInstance = new Mutex(true, SingleInstanceName, out var firstInstance);
+        if (!firstInstance) return false;
+        _activation = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateName);
+        return true;
+    }
+
+    /// <summary>Notify the owning instance to foreground its window. Opens the named
+    /// activation event read-only, which exists only if the owner is running.</summary>
+    private static void SignalActivation()
+    {
+        try
+        {
+            using var signal = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateName);
+            signal.Set();
+        }
+        catch
+        {
+            // No owner is alive to receive the signal; nothing to do.
+        }
+    }
+
+    /// <summary>Wake the visible window when another launch signals <see cref="_activation"/>.</summary>
+    private static void StartActivationWatch()
+    {
+        _activationTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(300)
+        };
+        _activationTimer.Tick += (_, _) =>
+        {
+            if (_activation is { } handle && handle.WaitOne(0)) BringOwnerToFront();
+        };
+        _activationTimer.Start();
+    }
+
+    private static void BringOwnerToFront()
+    {
+        var window = Current.MainWindow;
+        if (window is null) return;
+        if (!window.IsVisible) window.Show();
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.Activate();
+        window.Topmost = true;
+        window.Topmost = false;
     }
 
     private static void OnAnyWindowLoaded(object sender, RoutedEventArgs e)
