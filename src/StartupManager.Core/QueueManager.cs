@@ -447,6 +447,50 @@ public class QueueManager
         public QueueRunState State { get; init; }
         public QueueRunStep? Step { get; init; }
         public string? Message { get; init; }
+
+        /// <summary>
+        /// The underlying failure, when <see cref="State"/> is <see cref="QueueRunState.Failed"/>.
+        /// Kept as the real exception so callers can show type + Win32 code + message instead
+        /// of a generic "启动失败" with no clue what went wrong.
+        /// </summary>
+        public Exception? Error { get; init; }
+
+        /// <summary>
+        /// Human-readable reason for the failure (e.g. "找不到文件", "系统找不到指定的文件",
+        /// "拒绝访问"). Empty for a successful step. This is what the UI surfaces in the timeline.
+        /// </summary>
+        public string? ErrorDetail { get; init; }
+    }
+
+    /// <summary>
+    /// Turn an exception into a compact, user-facing reason. Win32-mapped errors get a
+    /// friendly hint (file not found / access denied / no association), so a queue failure
+    /// is never reported as an opaque "启动失败".
+    /// </summary>
+    public static string DescribeLaunchError(Exception ex)
+    {
+        // Only trust the low 16 bits as a Win32 code when the HResult really is
+        // FACILITY_WIN32 (0x80070000) — otherwise a generic COM/OOM error would be
+        // reported as a meaningless "Win32=16389" and mislead the user.
+        var hresult = unchecked((uint)ex.HResult);
+        var win32 = (ex as System.ComponentModel.Win32Exception)?.NativeErrorCode
+                    ?? ((hresult & 0xFFFF0000) == 0x80070000 ? (int)(hresult & 0xFFFF) : 0);
+        if (win32 is <= 0 or > 0xFFFF) win32 = 0;
+
+        var meaning = win32 switch
+        {
+            2 => "系统找不到指定的文件（可执行文件路径不存在）",
+            3 => "系统找不到指定的路径",
+            5 => "拒绝访问（权限不足或被安全软件拦截）",
+            32 => "文件正被另一个进程占用",
+            1155 => "没有关联的应用程序（文件类型未注册 Shell 打开方式）",
+            193 => "不是有效的可执行程序",
+            216 => "程序需要以管理员权限运行，当前进程未提权",
+            _ => ex.Message,
+        };
+
+        var code = win32 > 0 ? $"（Win32={win32}）" : "";
+        return $"{ex.GetType().Name}{code}：{meaning}";
     }
 
     /// <summary>Launch every enabled item of a queue, waiting its own delay from start (background-safe).</summary>
@@ -455,6 +499,7 @@ public class QueueManager
         var enabled = queue.Items.Where(i => i.Enabled).OrderBy(i => i.Order).ToList();
         var total = enabled.Count;
         var start = DateTime.UtcNow;
+        var failures = 0;
 
         progress?.Report(new QueueRunProgress
         {
@@ -502,11 +547,16 @@ public class QueueManager
                 Message = $"正在启动第 {idx + 1}/{total} 项：{it.Name}",
             });
 
-            var ok = false;
+            Exception? error = null;
             try
             {
                 var (exe, args) = StartupEntry.SplitCommandLine(it.Command);
-                if (exe is not null)
+                if (exe is null)
+                {
+                    // SplitCommandLine returns null only for empty/whitespace commands.
+                    error = new InvalidOperationException("命令为空或无法解析出可执行程序。");
+                }
+                else
                 {
                     var psi = new System.Diagnostics.ProcessStartInfo
                     {
@@ -516,25 +566,42 @@ public class QueueManager
                         WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal,
                     };
                     System.Diagnostics.Process.Start(psi);
-                    ok = true;
                 }
             }
-            catch { /* best effort */ }
+            catch (Exception ex)
+            {
+                // Keep the real reason (missing file, denied, no shell association, …)
+                // instead of swallowing it — the whole point is to *show* the error.
+                error = ex;
+            }
+
+            var detail = error is null ? null : DescribeLaunchError(error);
+            if (error is not null)
+            {
+                failures++;
+                // Also mirror to stderr so headless callers (MCP / CLI / logs) see the cause.
+                Console.Error.WriteLine(
+                    $"[QueueManager] 启动失败：「{it.Name}」 命令={it.Command}\n  {detail}");
+            }
 
             progress?.Report(new QueueRunProgress
             {
-                State = ok ? QueueRunState.Launched : QueueRunState.Failed,
+                State = error is null ? QueueRunState.Launched : QueueRunState.Failed,
                 Step = step,
-                Message = ok
+                Error = error,
+                ErrorDetail = detail,
+                Message = error is null
                     ? $"已启动第 {idx + 1}/{total} 项：{it.Name}"
-                    : $"启动失败：{it.Name}",
+                    : $"启动失败第 {idx + 1}/{total} 项：{it.Name} — {detail}",
             });
         }
 
         progress?.Report(new QueueRunProgress
         {
             State = QueueRunState.Finished,
-            Message = $"队列「{queue.Name}」执行完毕，共 {total} 项。",
+            Message = failures == 0
+                ? $"队列「{queue.Name}」执行完毕，共 {total} 项，全部成功。"
+                : $"队列「{queue.Name}」执行完毕，共 {total} 项，{failures} 项启动失败（见各步骤错误）。",
         });
     }
 }

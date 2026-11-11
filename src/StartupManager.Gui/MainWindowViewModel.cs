@@ -504,6 +504,17 @@ public class MainWindowViewModel : INotifyPropertyChanged
         private set { _queueRunSummary = value; OnPropertyChanged(); }
     }
 
+    /// <summary>
+    /// Accumulated, human-readable failure reasons from the current run. Shown in a
+    /// red banner under the timeline so every error stays visible after the queue ends.
+    /// </summary>
+    private string _queueErrorSummary = "";
+    public string QueueErrorSummary
+    {
+        get => _queueErrorSummary;
+        private set { _queueErrorSummary = value; OnPropertyChanged(); }
+    }
+
     /// <summary>Rebuild the timeline from the queue's current enabled order.</summary>
     /// <summary>
     /// Clear per-run state and rebuild the timeline for the currently selected queue.
@@ -516,6 +527,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         QueueRunSummary = SelectedQueue is null
             ? ""
             : $"「{SelectedQueue.Name}」待执行，共 {SelectedQueue.Items.Count(i => i.Enabled)} 项。";
+        QueueErrorSummary = "";
         QueueRunning = false;
         RebuildQueueSteps();
     }
@@ -562,10 +574,11 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
         QueueRunning = true;
         QueueRunSummary = $"准备执行「{q.Name}」，共 {enabled.Count} 项…";
+        QueueErrorSummary = ""; // clear errors from any previous run
         Status = $"已触发队列「{q.Name}」启动（后台进行中）…";
 
         // IProgress marshals each report back onto the UI thread automatically.
-        var progress = new Progress<QueueManager.QueueRunProgress>(OnQueueProgress);
+        var progress = new Progress<QueueManager.QueueRunProgress>(p => OnQueueProgress(p, q));
         System.Threading.Tasks.Task.Run(() =>
         {
             try
@@ -574,16 +587,20 @@ public class MainWindowViewModel : INotifyPropertyChanged
             }
             catch (Exception ex)
             {
+                // A failure outside a single step (queue-level crash). Surface the real
+                // exception rather than a generic message, and let the UI prompt about it.
                 ((IProgress<QueueManager.QueueRunProgress>)progress).Report(new QueueManager.QueueRunProgress
                 {
                     State = QueueManager.QueueRunState.Failed,
-                    Message = "执行出错：" + ex.Message,
+                    Error = ex,
+                    ErrorDetail = QueueManager.DescribeLaunchError(ex),
+                    Message = "队列执行出错：" + QueueManager.DescribeLaunchError(ex),
                 });
             }
         });
     }
 
-    private void OnQueueProgress(QueueManager.QueueRunProgress p)
+    private void OnQueueProgress(QueueManager.QueueRunProgress p, StartupQueue queue)
     {
         if (p.Message is not null)
         {
@@ -602,10 +619,41 @@ public class MainWindowViewModel : INotifyPropertyChanged
                 QueueManager.QueueRunState.Failed => QueueStepState.Failed,
                 _ => vm.State,
             };
+
+            // Persist the real reason on the step so the timeline can show it (tooltip +
+            // inline error text) instead of just a red "失败" badge.
+            if (p.State == QueueManager.QueueRunState.Failed && p.ErrorDetail is not null)
+            {
+                vm.ErrorDetail = p.ErrorDetail;
+                QueueErrorSummary = string.IsNullOrEmpty(QueueErrorSummary)
+                    ? $"「{vm.Name}」：{p.ErrorDetail}"
+                    : $"{QueueErrorSummary}\n「{vm.Name}」：{p.ErrorDetail}";
+            }
+        }
+        else if (p.State == QueueManager.QueueRunState.Failed && p.ErrorDetail is not null)
+        {
+            // Queue-level failure (no step index).
+            QueueErrorSummary = string.IsNullOrEmpty(QueueErrorSummary)
+                ? p.ErrorDetail
+                : $"{QueueErrorSummary}\n{p.ErrorDetail}";
         }
 
-        if (p.State == QueueManager.QueueRunState.Finished || p.State == QueueManager.QueueRunState.Failed
-            && p.Step is null)
+        // "最好把报错结果提示出来": actively tell the user a step failed, with the
+        // concrete reason, instead of relying on them to notice a red dot.
+        if (p.State == QueueManager.QueueRunState.Failed && p.Step is not null)
+        {
+            var name = p.Step.Name;
+            var cmd = queue.Items.FirstOrDefault(i => i.Name == name)?.Command ?? "";
+            MessageBox.Show(
+                $"队列「{queue.Name}」中的第 {p.Step.Index + 1}/{p.Step.Total} 项启动失败：\n\n" +
+                $"应用：{name}\n命令：{cmd}\n\n" +
+                $"原因：{p.ErrorDetail ?? "未知错误"}\n\n" +
+                "详细报错也会显示在下方「执行过程」的错误栏中。",
+                "队列启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        if (p.State == QueueManager.QueueRunState.Finished ||
+            (p.State == QueueManager.QueueRunState.Failed && p.Step is null))
         {
             QueueRunning = false;
         }
@@ -641,6 +689,22 @@ public class QueueStepVm : INotifyPropertyChanged
     }
 
     public string StepNo => $"{Index + 1}/{Total}";
+
+    /// <summary>The real reason this step failed (null/empty until a failure occurs).</summary>
+    private string? _errorDetail;
+    public string? ErrorDetail
+    {
+        get => _errorDetail;
+        set
+        {
+            if (_errorDetail == value) return;
+            _errorDetail = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ErrorDetail)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasError)));
+        }
+    }
+
+    public bool HasError => !string.IsNullOrEmpty(ErrorDetail);
 
     public string StateText => State switch
     {

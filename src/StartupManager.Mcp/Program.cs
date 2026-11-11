@@ -778,7 +778,16 @@ public static class Program
             when = it.DelaySeconds <= 0 ? "立即" : $"点击后 {it.DelaySeconds} 秒",
         }).ToList();
 
-        Task.Run(() => QueueManager.StartQueue(q));
+        // Surface launch failures in the diagnostics channel: the core already mirrors
+        // each failed step to stderr, and this reporter adds an explicit per-step line so
+        // an LLM client / operator can see exactly which command failed and why.
+        var progress = new Progress<QueueManager.QueueRunProgress>(p =>
+        {
+            if (p.State == QueueManager.QueueRunState.Failed && p.ErrorDetail is not null)
+                Console.Error.WriteLine(
+                    $"[{ServerName}] start_queue 启动失败：{p.Step?.Name ?? "(队列级)"} — {p.ErrorDetail}");
+        });
+        Task.Run(() => QueueManager.StartQueue(q, progress));
         return Json(new
         {
             ok = true,

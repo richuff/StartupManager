@@ -34,6 +34,8 @@
     <local:InverseBoolConverter x:Key="InverseBoolCv"/>
     <local:BoolTextConverter x:Key="BoolTextCv"/>
     <local:BoolBrushConverter x:Key="BoolBrushCv"/>
+    <local:BoolToVisibilityConverter x:Key="BoolVisCv"/>
+    <local:NonEmptyToVisibilityConverter x:Key="NonEmptyVisCv"/>
 
     <!-- primary (filled blue) button -->
     <Style x:Key="PrimaryBtn" TargetType="Button">

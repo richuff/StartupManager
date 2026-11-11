@@ -292,7 +292,8 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Border Background="White" CornerRadius="8" Padding="10,7" Margin="0,0,8,8"
-                                                    BorderBrush="{StaticResource Border}" BorderThickness="1">
+                                                    BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                                    ToolTip="{Binding ErrorDetail}">
                                                 <StackPanel Orientation="Horizontal">
                                                     <Border Width="18" Height="18" CornerRadius="9"
                                                             Background="{Binding StateBrush}" VerticalAlignment="Center">
@@ -301,21 +302,42 @@
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Border>
                                                     <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource Txt}"
-                                                                   FontSize="12" MaxWidth="150" TextTrimming="CharacterEllipsis"/>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding Name}" Foreground="{StaticResource Txt}"
+                                                                       FontSize="12" MaxWidth="150" TextTrimming="CharacterEllipsis"/>
+                                                            <!-- red warning marker, only when this step failed -->
+                                                            <TextBlock Text=" ⚠" FontSize="12" Foreground="{StaticResource Red}"
+                                                                       Visibility="{Binding HasError, Converter={StaticResource BoolVisCv}}"/>
+                                                        </StackPanel>
                                                         <StackPanel Orientation="Horizontal">
                                                             <TextBlock Text="{Binding StateText}" FontSize="10"
                                                                        Foreground="{Binding StateBrush}"/>
                                                             <TextBlock Text="{Binding DelayText}" FontSize="10"
                                                                        Foreground="{StaticResource Sub}" Margin="6,0,0,0"/>
                                                         </StackPanel>
+                                                        <!-- concrete error text, wrapped so nothing is cut off -->
+                                                        <TextBlock Text="{Binding ErrorDetail}" FontSize="10" MaxWidth="230"
+                                                                   TextWrapping="Wrap" Foreground="{StaticResource Red}"
+                                                                   Visibility="{Binding HasError, Converter={StaticResource BoolVisCv}}"/>
                                                     </StackPanel>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Text="按各自延迟从点击时刻起依次启动；圆点表示当前进度。"
+
+                                <!-- aggregated error banner: stays visible after the run ends -->
+                                <Border Margin="0,4,0,0" Padding="10,7" CornerRadius="6"
+                                        Background="#FFFDECEC" BorderBrush="{StaticResource Red}" BorderThickness="1"
+                                        Visibility="{Binding QueueErrorSummary, Converter={StaticResource NonEmptyVisCv}}">
+                                    <StackPanel>
+                                        <TextBlock Text="⚠ 本次执行出现启动失败，报错如下：" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Red}" FontSize="11"/>
+                                        <TextBlock Text="{Binding QueueErrorSummary}" Foreground="{StaticResource Txt}"
+                                                   FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="按各自延迟从点击时刻起依次启动；圆点表示当前进度，失败步骤显示具体报错。"
                                            Foreground="{StaticResource Sub}" FontSize="11" Margin="0,2,0,0"/>
                             </StackPanel>
                         </Border>
