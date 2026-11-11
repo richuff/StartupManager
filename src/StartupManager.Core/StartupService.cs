@@ -13,10 +13,14 @@ public class StartupService
 {
     private readonly List<IStartupProvider> _providers = new();
     private readonly QueueManager _queueManager;
+    private readonly McpServerManager _mcpServers;
 
     public IReadOnlyList<IStartupProvider> Providers => _providers;
 
     public QueueManager Queues => _queueManager;
+
+    /// <summary>Locally recorded MCP servers (name + description + config JSON).</summary>
+    public McpServerManager McpServers => _mcpServers;
 
     public StartupService() : this(null) { }
 
@@ -28,6 +32,10 @@ public class StartupService
             string.IsNullOrWhiteSpace(queueStorePath) ? QueueManager.StoreFilePath : queueStorePath,
             directQueueWrite);
         _queueManager.Load();
+
+        _mcpServers = new McpServerManager(
+            McpServerManager.StoreFilePath, directQueueWrite);
+        _mcpServers.Load();
 
         _providers.Add(new RegistryStartupProvider(
             Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Run",

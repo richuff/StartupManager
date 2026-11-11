@@ -89,6 +89,66 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    // ---- recorded MCP servers ----
+    public ObservableCollection<McpServerEntry> McpServers { get; } = new();
+
+    private McpServerEntry? _selectedMcpServer;
+    public McpServerEntry? SelectedMcpServer
+    {
+        get => _selectedMcpServer;
+        set { if (!ReferenceEquals(_selectedMcpServer, value)) { _selectedMcpServer = value; OnPropertyChanged(); } }
+    }
+
+    public void RefreshMcpServers()
+    {
+        _service.McpServers.Load();
+        McpServers.Clear();
+        foreach (var s in _service.McpServers.Servers)
+            McpServers.Add(s);
+        SelectedMcpServer = McpServers.FirstOrDefault();
+    }
+
+    /// <summary>Record a new MCP server. Returns an error string, or null on success.</summary>
+    public string? AddMcpServer(string name, string description, string command, string configJson)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "名称不能为空。";
+        if (McpServers.Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)))
+            return $"已存在名为 “{name}” 的记录，请换一个名称。";
+
+        var entry = _service.McpServers.Add(name, description, command, configJson);
+        McpServers.Add(entry);
+        SelectedMcpServer = entry;
+        Status = $"已记录 MCP 服务：{name}";
+        return null;
+    }
+
+    /// <summary>Save edits to a record. Returns an error string, or null on success.</summary>
+    public string? SaveMcpServer(McpServerEntry entry, string name, string description,
+        string command, string configJson)
+    {
+        var error = _service.McpServers.Update(entry.Id, name, description, command, configJson);
+        if (error is not null) return error;
+
+        entry.Name = name;
+        entry.Description = description;
+        entry.Command = command;
+        entry.ConfigJson = string.IsNullOrWhiteSpace(configJson)
+            ? entry.BuildConfigFromCommand()
+            : configJson;
+
+        Status = $"已保存 MCP 服务：{name}";
+        return null;
+    }
+
+    public void RemoveMcpServer(McpServerEntry entry)
+    {
+        _service.McpServers.Remove(entry.Id);
+        McpServers.Remove(entry);
+        if (ReferenceEquals(SelectedMcpServer, entry))
+            SelectedMcpServer = McpServers.FirstOrDefault();
+        Status = $"已删除 MCP 服务记录：{entry.Name}";
+    }
+
     // ---- execution queues ----
     public ObservableCollection<StartupQueue> Queues { get; } = new();
     private StartupQueue? _selectedQueue;
@@ -123,6 +183,9 @@ public class MainWindowViewModel : INotifyPropertyChanged
         ApplySort();
         foreach (var q in _service.Queues.Queues)
             Queues.Add(q);
+        foreach (var s in _service.McpServers.Servers)
+            McpServers.Add(s);
+        SelectedMcpServer = McpServers.FirstOrDefault();
     }
 
     /// <summary>Reload the queue list from the service (used after loading a custom store).</summary>
