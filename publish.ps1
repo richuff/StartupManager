@@ -133,6 +133,11 @@ $singleFileValue = if ($SingleFile.IsPresent) { 'true' } else { 'false' }
 $stage = Join-Path $env:TEMP ('sm-publish-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
+# The MCP publish must stage OUTSIDE $stage: everything under $stage is treated as
+# final payload, so a nested staging folder would be shipped as a junk subdirectory.
+$mcpStage = Join-Path $env:TEMP ('sm-publish-mcp-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $mcpStage -Force | Out-Null
+
 $publishArgs = @(
     'publish', $guiProject,
     '-c', 'Release',
@@ -164,7 +169,6 @@ try {
     # Always re-publish: skipping when the file already exists would silently ship a stale
     # binary that no longer matches the current sources.
     $mcpProject = Join-Path $repoRoot 'src\StartupManager.Mcp\StartupManager.Mcp.csproj'
-    $mcpStage = Join-Path $stage '.mcp'
 
     Write-Step '发布 MCP 服务端'
 
@@ -225,6 +229,7 @@ try {
 }
 finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $mcpStage -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # ---------------------------------------------------------------- verify
