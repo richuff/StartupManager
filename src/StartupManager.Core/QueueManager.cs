@@ -506,7 +506,7 @@ public class QueueManager
             State = QueueRunState.Starting,
             Message = total == 0
                 ? "该队列没有启用的应用。"
-                : $"队列「{queue.Name}」开始执行，共 {total} 项。",
+                : $"开始执行，共 {total} 项 · 「{queue.Name}」",
         });
 
         if (total == 0)
@@ -600,8 +600,8 @@ public class QueueManager
         {
             State = QueueRunState.Finished,
             Message = failures == 0
-                ? $"队列「{queue.Name}」执行完毕，共 {total} 项，全部成功。"
-                : $"队列「{queue.Name}」执行完毕，共 {total} 项，{failures} 项启动失败（见各步骤错误）。",
+                ? $"执行完毕，共 {total} 项，全部成功 · 「{queue.Name}」"
+                : $"执行完毕，共 {total} 项，{failures} 项启动失败（见各步骤错误）· 「{queue.Name}」",
         });
     }
 }

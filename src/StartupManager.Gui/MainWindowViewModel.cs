@@ -589,7 +589,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         QueueSteps.Clear();
         QueueRunSummary = SelectedQueue is null
             ? ""
-            : $"「{SelectedQueue.Name}」待执行，共 {SelectedQueue.Items.Count(i => i.Enabled)} 项。";
+            : $"待执行，共 {SelectedQueue.Items.Count(i => i.Enabled)} 项 · 「{SelectedQueue.Name}」";
         QueueErrorSummary = "";
         QueueRunning = false;
         RebuildQueueSteps();
@@ -636,7 +636,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         RebuildQueueSteps(enabled);
 
         QueueRunning = true;
-        QueueRunSummary = $"准备执行「{q.Name}」，共 {enabled.Count} 项…";
+        QueueRunSummary = $"准备执行，共 {enabled.Count} 项 · 「{q.Name}」";
         QueueErrorSummary = ""; // clear errors from any previous run
         Status = $"已触发队列「{q.Name}」启动（后台进行中）…";
 
