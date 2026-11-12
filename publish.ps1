@@ -6,6 +6,9 @@
     以 Release 自包含方式发布 GUI（连同 MCP 服务端），输出到 D:\StartupManager。
     目标机器无需预装 .NET 运行时。
 
+    先发布到临时暂存目录，再逐个同步到输出目录，只覆盖真正有变化的文件。
+    这样 MCP 服务端在被客户端拉起时不会导致整包发布失败。
+
 .PARAMETER OutputDir
     发布目标目录，默认 D:\StartupManager。
 
@@ -60,6 +63,35 @@ function Assert-Path([string]$Path, [string]$What) {
     }
 }
 
+# 覆盖可能被占用的文件：Windows 不允许覆盖已被进程映射的 DLL，
+# 所以失败一次就结束占用它的实例后立刻重试。
+# MCP 客户端会在进程退出后约 600ms 重新拉起，而单个文件拷贝通常几毫秒完成，
+# 因此“杀掉再抢在重启前拷贝”是可行的；多试几轮以覆盖竞争情况。
+function Copy-WithUnlock {
+    param([string]$Source, [string]$Destination)
+
+    $parent = Split-Path -Parent $Destination
+    if ($parent -and -not (Test-Path -LiteralPath $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        try {
+            Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            if ($attempt -eq 19) { throw }
+            $holders = @(Get-Process -Name 'StartupManager.Gui', 'StartupManager.Mcp' -ErrorAction SilentlyContinue)
+            if ($holders.Count -eq 0) {
+                Start-Sleep -Milliseconds 200
+                continue
+            }
+            $holders | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 # ---------------------------------------------------------------- preflight
 Write-Step '检查环境'
 
@@ -75,8 +107,9 @@ Write-Host "  dotnet SDK : $sdkVersion"
 Write-Host "  仓库根目录 : $repoRoot"
 Write-Host "  输出目录   : $OutputDir"
 
-# A running instance would lock the output files and make the copy fail.
-$running = Get-Process -Name 'StartupManager.Gui' -ErrorAction SilentlyContinue
+# 运行中的 GUI 会锁住输出文件；MCP 服务端不在这里处理，因为它被客户端自动重启，
+# 由同步阶段的 Copy-WithUnlock 按需结束。
+$running = @(Get-Process -Name 'StartupManager.Gui' -ErrorAction SilentlyContinue)
 if ($running) {
     Write-Host ''
     Write-Host "  检测到正在运行的实例（PID: $($running.Id -join ', ')），正在关闭…" -ForegroundColor Yellow
@@ -95,6 +128,11 @@ Write-Step '发布自包含程序'
 
 $singleFileValue = if ($SingleFile.IsPresent) { 'true' } else { 'false' }
 
+# 先发布到暂存目录。MCP 服务端就跑在 $OutputDir 里，客户端会在它退出后立刻重启，
+# 直接发布会被正在运行的 MCP 进程锁住 StartupManager.Core.dll 而整体失败。
+$stage = Join-Path $env:TEMP ('sm-publish-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $stage -Force | Out-Null
+
 $publishArgs = @(
     'publish', $guiProject,
     '-c', 'Release',
@@ -105,62 +143,88 @@ $publishArgs = @(
     '-p:EnableCompressionInSingleFile=false',
     '-p:DebugType=none',
     '-p:DebugSymbols=false',
-    '-o', $OutputDir,
+    '-o', $stage,
     '--nologo',
     '-v', 'minimal'
 ) + $extraBuildArgs
 
-Write-Host "  dotnet $($publishArgs -join ' ')"
-
-# Clean the GUI project too so no stale assembly from an older build survives.
-& dotnet clean $guiProject -c Release -v quiet @extraBuildArgs 2>&1 | Out-Null
-
-& dotnet @publishArgs
-if ($LASTEXITCODE -ne 0) { throw "发布失败（退出码 $LASTEXITCODE）。" }
-
-# ---------------------------------------------------------------- tidy
-Write-Step '整理输出目录'
-
-if (-not $NoClean) {
-    # PDBs are useless in a release drop.
-    Get-ChildItem -LiteralPath $OutputDir -Filter '*.pdb' -File -ErrorAction SilentlyContinue |
-        Remove-Item -Force -ErrorAction SilentlyContinue
-}
-
 $appExe = Join-Path $OutputDir $appExeName
-Assert-Path $appExe '发布后的主程序'
-
-# The MCP server ships as its own publish so we know all of its runtime files land.
-# Always re-publish: skipping when the file already exists would silently ship a stale
-# binary that no longer matches the current sources.
-$mcpProject = Join-Path $repoRoot 'src\StartupManager.Mcp\StartupManager.Mcp.csproj'
 $mcpExe = Join-Path $OutputDir 'StartupManager.Mcp.exe'
 
-Write-Step '发布 MCP 服务端'
-
-$mcpTmp = Join-Path $env:TEMP ('sm-mcp-' + [Guid]::NewGuid().ToString('N'))
 try {
+    Write-Host "  dotnet $($publishArgs -join ' ')"
+
+    # Clean the GUI project too so no stale assembly from an older build survives.
+    & dotnet clean $guiProject -c Release -v quiet @extraBuildArgs 2>&1 | Out-Null
+
+    & dotnet @publishArgs
+    if ($LASTEXITCODE -ne 0) { throw "发布失败（退出码 $LASTEXITCODE）。" }
+
+    # The MCP server ships as its own publish so we know all of its runtime files land.
+    # Always re-publish: skipping when the file already exists would silently ship a stale
+    # binary that no longer matches the current sources.
+    $mcpProject = Join-Path $repoRoot 'src\StartupManager.Mcp\StartupManager.Mcp.csproj'
+    $mcpStage = Join-Path $stage '.mcp'
+
+    Write-Step '发布 MCP 服务端'
+
     # Clean first: incremental publish can keep a stale MCP binary that no longer
     # matches the sources, silently shipping fixes that never took effect.
     & dotnet clean $mcpProject -c Release -v quiet @extraBuildArgs 2>&1 | Out-Null
     & dotnet publish $mcpProject -c Release -r win-x64 --self-contained true `
         -p:PublishSingleFile=false -p:DebugType=none -p:DebugSymbols=false `
-        -o $mcpTmp --nologo -v minimal @extraBuildArgs
+        -o $mcpStage --nologo -v minimal @extraBuildArgs
     if ($LASTEXITCODE -ne 0) { throw 'MCP 服务端发布失败。' }
 
     # Copy only the MCP payload; its runtime .dlls are already in the GUI drop.
-    $mcpFiles = Get-ChildItem -LiteralPath $mcpTmp -Filter 'StartupManager.Mcp.*' -File
+    $mcpFiles = Get-ChildItem -LiteralPath $mcpStage -Filter 'StartupManager.Mcp.*' -File
     if ($mcpFiles.Count -eq 0) { throw 'MCP 输出中没有找到 StartupManager.Mcp.* 文件。' }
+    $mcpFiles | Copy-Item -Destination $stage -Force
 
-    $mcpFiles | Copy-Item -Destination $OutputDir -Force
-    foreach ($f in $mcpFiles) { Write-Host "  + $($f.Name)" -ForegroundColor DarkGray }
+    if (-not $NoClean) {
+        # PDBs are useless in a release drop.
+        Get-ChildItem -LiteralPath $stage -Filter '*.pdb' -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+
+    # ------------------------------------------------------------ sync
+    Write-Step '同步到输出目录'
+
+    $staged = Get-ChildItem -LiteralPath $stage -File -Recurse
+    $pending = New-Object System.Collections.Generic.List[object]
+    $unchanged = 0
+
+    foreach ($f in $staged) {
+        $rel = $f.FullName.Substring($stage.Length).TrimStart('\')
+        $dest = Join-Path $OutputDir $rel
+        if (Test-Path -LiteralPath $dest) {
+            $existing = Get-Item -LiteralPath $dest
+            if ($existing.Length -eq $f.Length -and $existing.LastWriteTimeUtc -eq $f.LastWriteTimeUtc) {
+                $unchanged++
+                continue
+            }
+        }
+        $pending.Add([pscustomobject]@{ Source = $f.FullName; Destination = $dest; Relative = $rel })
+    }
+
+    if ($pending.Count -eq 0) {
+        Write-Host "  没有文件变化（$unchanged 个文件一致）。"
+    }
+    else {
+        foreach ($item in $pending) {
+            Copy-WithUnlock -Source $item.Source -Destination $item.Destination
+            Write-Host "  + $($item.Relative)" -ForegroundColor DarkGray
+        }
+        Write-Host "  已更新 $($pending.Count) 个文件，另有 $unchanged 个未变化。"
+    }
+
+    Assert-Path $appExe '发布后的主程序'
+    if (-not (Test-Path -LiteralPath $mcpExe)) {
+        throw "MCP 服务端未能放入输出目录：$mcpExe"
+    }
 }
 finally {
-    Remove-Item -LiteralPath $mcpTmp -Recurse -Force -ErrorAction SilentlyContinue
-}
-
-if (-not (Test-Path -LiteralPath $mcpExe)) {
-    throw "MCP 服务端未能放入输出目录：$mcpExe"
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # ---------------------------------------------------------------- verify

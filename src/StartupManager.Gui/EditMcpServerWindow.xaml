@@ -4,6 +4,33 @@
         Title="MCP 服务记录" Width="620" SizeToContent="Height" WindowStartupLocation="CenterOwner"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" FontFamily="Microsoft YaHei" FontSize="13">
+    <Window.Resources>
+        <Style x:Key="MiniBtn" TargetType="Button">
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E5E6EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="#4D6BFE"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#F2F3F5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <Border Background="White" CornerRadius="10" BorderBrush="#E5E6EB" BorderThickness="1">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.30" Color="#1F2329"/>
@@ -102,30 +129,12 @@
                     </Grid.ColumnDefinitions>
                     <Label Content="JSON 配置（可直接粘贴到客户端）：" Grid.Column="0" Padding="0"
                            Foreground="#1F2329" VerticalAlignment="Center"/>
-                    <Button Grid.Column="1" Content="由命令生成" Padding="10,4" FontSize="11" Cursor="Hand"
-                            Background="White" BorderBrush="#E5E6EB" BorderThickness="1"
-                            Foreground="#4D6BFE" Click="OnGenerateConfig">
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                  Margin="{TemplateBinding Padding}"/>
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="#F2F3F5"/>
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Content="格式化" Style="{StaticResource MiniBtn}"
+                                ToolTip="按 2 空格缩进重新排版（Ctrl+Shift+F）" Click="OnFormatConfig"/>
+                        <Button Content="由命令生成" Style="{StaticResource MiniBtn}" Margin="6,0,0,0"
+                                Click="OnGenerateConfig"/>
+                    </StackPanel>
                 </Grid>
                 <TextBox x:Name="ConfigBox" Height="140" Padding="10,7" BorderBrush="#E5E6EB" BorderThickness="1"
                          Background="White" Foreground="#1F2329" FontFamily="Consolas" FontSize="12"

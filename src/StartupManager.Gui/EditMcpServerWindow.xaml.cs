@@ -1,3 +1,5 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.Win32;
@@ -81,6 +83,52 @@ public partial class EditMcpServerWindow : Window
 
     private void OnGenerateConfig(object sender, RoutedEventArgs e) => GenerateConfig();
 
+    /// <summary>Re-indent the JSON box: 2-space indent, no escaped non-ASCII.</summary>
+    private void OnFormatConfig(object sender, RoutedEventArgs e)
+    {
+        var text = ConfigBox.Text;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            HintText.Text = "没有可格式化的 JSON。";
+            return;
+        }
+
+        if (!TryFormatJson(text, out var formatted, out var error))
+        {
+            HintText.Text = "格式化失败：" + error;
+            MessageBox.Show("这段文本不是合法的 JSON：\n\n" + error, "格式化失败",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        ConfigBox.Text = formatted;
+        HintText.Text = "已格式化为 2 空格缩进。";
+    }
+
+    private static readonly JsonSerializerOptions FormatOptions = new()
+    {
+        WriteIndented = true,
+        IndentSize = 2,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    internal static bool TryFormatJson(string text, out string formatted, out string error)
+    {
+        formatted = "";
+        error = "";
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            formatted = JsonSerializer.Serialize(doc.RootElement, FormatOptions);
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
     private void OnCopyConfig(object sender, RoutedEventArgs e)
     {
         var text = ConfigBox.Text;
@@ -124,6 +172,12 @@ public partial class EditMcpServerWindow : Window
         // No hand-written JSON but a command was given: derive a usable snippet.
         if (string.IsNullOrWhiteSpace(ConfigJson) && Command.Length > 0)
             ConfigJson = new McpServerEntry { Name = name, Command = Command }.BuildConfigFromCommand();
+
+        // Normalize valid JSON so the stored snippet is always 2-space indented,
+        // whatever was pasted. Invalid JSON is kept verbatim rather than rejected.
+        if (!string.IsNullOrWhiteSpace(ConfigJson) &&
+            TryFormatJson(ConfigJson, out var normalized, out _))
+            ConfigJson = normalized;
 
         DialogResult = true;
         Close();
