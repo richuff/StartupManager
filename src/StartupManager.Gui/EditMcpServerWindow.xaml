@@ -136,10 +136,10 @@
                                 Click="OnGenerateConfig"/>
                     </StackPanel>
                 </Grid>
-                <TextBox x:Name="ConfigBox" Height="140" Padding="10,7" BorderBrush="#E5E6EB" BorderThickness="1"
+                <TextBox x:Name="ConfigBox" Height="160" Padding="10,7" BorderBrush="#E5E6EB" BorderThickness="1"
                          Background="White" Foreground="#1F2329" FontFamily="Consolas" FontSize="12"
-                         AcceptsReturn="True" TextWrapping="NoWrap"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"/>
 
                 <StackPanel Orientation="Horizontal" Margin="0,14,0,18">
                     <Button Content="复制配置" Width="96" Padding="10,6" Cursor="Hand"

@@ -417,7 +417,8 @@
                                      SelectedItem="{Binding SelectedMcpServer}"
                                      SelectionChanged="McpServerList_OnSelectionChanged"
                                      MouseDoubleClick="OnEditMcpServer"
-                                     Background="Transparent" BorderThickness="0">
+                                     Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="编辑…" Tag="✎" Style="{StaticResource GlyphMenuItem}" Click="OnEditMcpServer"/>
@@ -477,25 +478,30 @@
                             <TextBlock DockPanel.Dock="Top" Text="描述" Foreground="{StaticResource Sub}" Margin="0,0,0,4"/>
                             <Border DockPanel.Dock="Top" Background="#F7F8FA" CornerRadius="8" Padding="10"
                                     BorderBrush="{StaticResource Border}" BorderThickness="1" Margin="0,0,0,10">
+                                <!-- Capped height with an ellipsis: a long description must not stretch
+                                     the pane or bring in a scrollbar. -->
                                 <TextBlock x:Name="McpDescText" Foreground="{StaticResource Txt}" TextWrapping="Wrap"
-                                           MinHeight="40"/>
+                                           MaxHeight="46" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Top"/>
                             </Border>
 
                             <TextBlock DockPanel.Dock="Top" Text="命令 / 路径" Foreground="{StaticResource Sub}" Margin="0,0,0,4"/>
                             <Border DockPanel.Dock="Top" Background="#F7F8FA" CornerRadius="8" Padding="10"
                                     BorderBrush="{StaticResource Border}" BorderThickness="1" Margin="0,0,0,10">
                                 <TextBlock x:Name="McpCommandText" Foreground="{StaticResource Txt}"
-                                           FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                           FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
+                                           MaxHeight="46" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Top"/>
                             </Border>
 
                             <TextBlock DockPanel.Dock="Top" Text="JSON 配置" Foreground="{StaticResource Sub}" Margin="0,0,0,4"/>
-                            <Border Background="#F7F8FA" CornerRadius="8" Padding="10"
+                            <Border Background="#F7F8FA" CornerRadius="8" Padding="10,7"
                                     BorderBrush="{StaticResource Border}" BorderThickness="1">
                                 <TextBox x:Name="McpConfigBox" IsReadOnly="True" BorderThickness="0"
                                          Background="Transparent" Foreground="{StaticResource Txt}"
                                          FontFamily="Consolas" FontSize="12"
-                                         AcceptsReturn="True" TextWrapping="NoWrap"
-                                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+                                         AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"/>
                             </Border>
 
                             <TextBlock DockPanel.Dock="Bottom" x:Name="McpHint" Foreground="{StaticResource Sub}"
