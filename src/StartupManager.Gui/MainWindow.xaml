@@ -223,7 +223,8 @@
 
                             <ListBox x:Name="QueueList" ItemsSource="{Binding Queues}"
                                      SelectedItem="{Binding SelectedQueue}"
-                                     Background="Transparent" BorderThickness="0">
+                                     Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="编辑（重命名）" Tag="✎" Style="{StaticResource GlyphMenuItem}" Click="OnEditQueue"/>
@@ -293,11 +294,16 @@
                         <Border DockPanel.Dock="Top" Background="#F7F8FA" BorderBrush="{StaticResource Border}"
                                 BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,12">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="执行过程" FontWeight="SemiBold" Foreground="{StaticResource Txt}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding QueueRunSummary}" Foreground="{StaticResource Sub}"
-                                               VerticalAlignment="Center" Margin="12,0,0,0" TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="执行过程" FontWeight="SemiBold" Foreground="{StaticResource Txt}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding QueueRunSummary}" Foreground="{StaticResource Sub}"
+                                               VerticalAlignment="Center" Margin="12,0,0,0"
+                                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
                                 <ItemsControl ItemsSource="{Binding QueueSteps}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
