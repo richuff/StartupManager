@@ -48,7 +48,10 @@
 
             <StackPanel Grid.Row="1" Margin="24,20">
                 <TextBlock Text="启动项管理器 · StartupManager" FontSize="18" FontWeight="SemiBold" Foreground="#1F2329"/>
-                <TextBlock Text="Windows 启动项管理工具（增删 / 延迟 / 统计）" Margin="0,6,0,0" Foreground="#8F959E"/>
+                <TextBlock Margin="0,6,0,0" Foreground="#8F959E">
+                    <Run Text="Windows 启动项管理工具（增删 / 延迟 / 统计） · v"/>
+                    <Run x:Name="VersionText" Text="1.1.0"/>
+                </TextBlock>
                 <Rectangle Height="1" Fill="#E5E6EB" Margin="0,16"/>
                 <TextBlock TextWrapping="Wrap" Foreground="#4E5969" LineHeight="20">
                     支持管理注册表 Run/RunOnce、启动文件夹与延迟启动。

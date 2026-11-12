@@ -27,7 +27,7 @@ namespace StartupManager.Mcp;
 public static class Program
 {
     private const string ServerName = "startup-manager";
-    private const string ServerVersion = "1.0.0";
+    private const string ServerVersion = "1.1.0";
 
     /// <summary>
     /// MCP protocol versions this server speaks. If a client requests one of these we

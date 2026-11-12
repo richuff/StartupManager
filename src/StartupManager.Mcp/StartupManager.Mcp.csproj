@@ -13,9 +13,9 @@
     <Description>StartupManager 的 MCP (stdio) 服务端，供 LLM 客户端接入</Description>
     <Company>StartupManager</Company>
     <Copyright>Copyright © 2026</Copyright>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>

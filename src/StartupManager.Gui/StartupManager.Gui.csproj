@@ -18,9 +18,9 @@
     <Description>Windows 启动项与执行队列管理工具</Description>
     <Company>StartupManager</Company>
     <Copyright>Copyright © 2026</Copyright>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
     <NeutralLanguage>zh-CN</NeutralLanguage>
   </PropertyGroup>
 
