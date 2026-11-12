@@ -490,8 +490,7 @@
                             </Border>
 
                             <TextBlock DockPanel.Dock="Bottom" x:Name="McpHint" Foreground="{StaticResource Sub}"
-                                       FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
-                                       Text="双击列表项或右键「编辑…」可修改；右键可复制配置、删除记录。"/>
+                                       FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
                         </DockPanel>
                     </Border>
                 </Grid>
