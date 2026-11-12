@@ -234,7 +234,8 @@
                                 </ListBox.ContextMenu>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                                 <ListBox.ItemContainerStyle>
@@ -268,16 +269,24 @@
                     <DockPanel Grid.Column="1" Margin="12,0,0,0" LastChildFill="True">
                         <Border DockPanel.Dock="Top" Background="{StaticResource Panel}" BorderBrush="{StaticResource Border}"
                                 BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,12">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="队列名称：" VerticalAlignment="Center" Foreground="{StaticResource Sub}"/>
-                                <TextBlock x:Name="QueueNameText" VerticalAlignment="Center" FontWeight="SemiBold"
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="队列名称：" VerticalAlignment="Center" Foreground="{StaticResource Sub}"/>
+                                <!-- The name column shrinks and trims so a long name can never push the buttons out of view. -->
+                                <TextBlock Grid.Column="1" x:Name="QueueNameText" VerticalAlignment="Center" FontWeight="SemiBold"
                                            FontSize="14" Foreground="{StaticResource Txt}"
                                            Text="{Binding SelectedQueue.Name}"
+                                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
                                            Margin="0,0,0,0" MinWidth="60"/>
-                                <Button Style="{StaticResource PrimaryBtn}" Content="▶ 一键启动队列" Width="150" Margin="16,0,0,0"
+                                <Button Grid.Column="2" Style="{StaticResource PrimaryBtn}" Content="▶ 一键启动队列" Width="150" Margin="16,0,0,0"
                                         Click="OnStartQueue" IsEnabled="{Binding QueueRunning, Converter={StaticResource InverseBoolCv}}"/>
-                                <Button Style="{StaticResource QuietBtn}" Content="＋ 添加应用" Width="120" Margin="10,0,0,0" Click="OnAddQueueItem"/>
-                            </StackPanel>
+                                <Button Grid.Column="3" Style="{StaticResource QuietBtn}" Content="＋ 添加应用" Width="120" Margin="10,0,0,0" Click="OnAddQueueItem"/>
+                            </Grid>
                         </Border>
 
                         <!-- execution timeline: shows what the queue is doing, step by step -->
