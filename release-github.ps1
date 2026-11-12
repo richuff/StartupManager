@@ -109,6 +109,37 @@ function Invoke-Tool([string]$Exe, [string[]]$ToolArgs) {
 function Invoke-Git([string[]]$GitArgs) { Invoke-Tool 'git' $GitArgs }
 function Invoke-Gh([string[]]$GhArgs) { Invoke-Tool 'gh' $GhArgs }
 
+# Compress-Archive 用独占方式读取源文件，而发布的 MCP 服务端常驻运行会锁住
+# 自己的 dll，导致打包失败。这里显式用 FileShare.ReadWrite 打开，规避锁占用。
+function New-ZipFromDirectory([string]$SourceDir, [string]$DestinationZip) {
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    $root = (Resolve-Path -LiteralPath $SourceDir).Path.TrimEnd('\')
+    $stream = [System.IO.File]::Open($DestinationZip, [System.IO.FileMode]::Create,
+        [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    try {
+        $zip = New-Object System.IO.Compression.ZipArchive($stream, [System.IO.Compression.ZipArchiveMode]::Create, $true)
+        try {
+            $files = Get-ChildItem -LiteralPath $root -Recurse -File -Force
+            foreach ($file in $files) {
+                $relative = $file.FullName.Substring($root.Length).TrimStart('\').Replace('\', '/')
+                $entry = $zip.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
+                $entryStream = $entry.Open()
+                try {
+                    $input = [System.IO.File]::Open($file.FullName, [System.IO.FileMode]::Open,
+                        [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+                    try { $input.CopyTo($entryStream) }
+                    finally { $input.Dispose() }
+                }
+                finally { $entryStream.Dispose() }
+            }
+        }
+        finally { $zip.Dispose() }
+    }
+    finally { $stream.Dispose() }
+}
+
 # gh 不读 .git-credentials，这里把 token 交给环境变量（不落盘、不回显）。
 function Resolve-GitHubToken {
     foreach ($name in 'GH_TOKEN', 'GITHUB_TOKEN') {
@@ -225,7 +256,7 @@ try {
     # 在产物目录内打包，保证解压后是平铺的一层，而不是多套一层目录。
     $sourceFiles = Get-ChildItem -LiteralPath $OutputDir -Force
     if ($sourceFiles.Count -eq 0) { throw "产物目录为空：$OutputDir" }
-    Compress-Archive -Path (Join-Path $OutputDir '*') -DestinationPath $ZipPath -CompressionLevel Optimal -Force
+    New-ZipFromDirectory -SourceDir $OutputDir -DestinationZip $ZipPath
 
     $zipItem = Get-Item -LiteralPath $ZipPath
     $zipMb = [math]::Round($zipItem.Length / 1MB, 1)
