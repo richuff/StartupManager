@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -78,8 +78,66 @@ public partial class MainWindow : Window
             _trayIcon?.HandleCallback(lParam);
             handled = true;
         }
+        else if (msg == 0x0024) // WM_GETMINMAXINFO: 修正最大化时 ResizeBorderThickness 溢出的问题
+        {
+            handled = AdjustMaximizedRect(lParam);
+        }
         return IntPtr.Zero;
     }
+
+    /// <summary>
+    /// WindowChrome 的 ResizeBorderThickness 会让最大化窗口比屏幕大一圈（边缘被裁掉）。
+    /// 这里把最大化矩形收缩回工作区，使最大化后四边与屏幕对齐。
+    /// </summary>
+    private bool AdjustMaximizedRect(IntPtr lParam)
+    {
+        try
+        {
+            // MINMAXINFO 布局：ptReserved(8) | ptMaxSize(8) | ptMaxPosition(8) | ptMinTrackSize(8) | ptMaxTrackSize(8)
+            // 我们只改写 ptMaxSize(偏移 8) 和 ptMaxPosition(偏移 16)。
+            var monitor = MonitorFromWindow(_hwndSource?.Handle ?? IntPtr.Zero, 0x00000002 /* MONITOR_DEFAULTTONEAREST */);
+            if (monitor == IntPtr.Zero) return false;
+
+            var mi = new MONITORINFO { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>() };
+            if (!GetMonitorInfo(monitor, ref mi)) return false;
+
+            int left = mi.rcWork.Left;
+            int top = mi.rcWork.Top;
+            int right = mi.rcWork.Right;
+            int bottom = mi.rcWork.Bottom;
+
+            System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 8, right - left);  // ptMaxSize.x
+            System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 12, bottom - top);  // ptMaxSize.y
+            System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 16, left);         // ptMaxPosition.x
+            System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 20, top);          // ptMaxPosition.y
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left, Top, Right, Bottom;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public uint cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
 
     private static string? ExtractAppIcon()
     {
@@ -345,6 +403,33 @@ public partial class MainWindow : Window
     private void OnExit(object sender, RoutedEventArgs e) => ReallyExit();
     private void OnAbout(object sender, RoutedEventArgs e)
         => new AboutWindow { Owner = this }.ShowDialog();
+
+    // ---- 自定义标题栏按钮（WindowChrome 方案）----
+    private void TopBar_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        // 点击菜单/按钮时不触发拖拽，避免干扰它们的交互。
+        if (e.Source is MenuItem or Menu or Button) return;
+        DragMove();
+    }
+
+    private void OnMinimize(object sender, RoutedEventArgs e)
+        => WindowState = WindowState.Minimized;
+
+    private void OnToggleMaximize(object sender, RoutedEventArgs e)
+        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    private void OnRequestClose(object sender, RoutedEventArgs e)
+        => Close();
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        // 切换最大化/还原图标：双向通知，确保还原后也回到方块。
+        if (MaxGlyph is null || RestoreGlyph is null) return;
+        var max = WindowState == WindowState.Maximized;
+        MaxGlyph.Visibility = max ? Visibility.Collapsed : Visibility.Visible;
+        RestoreGlyph.Visibility = max ? Visibility.Visible : Visibility.Collapsed;
+        MaxBtn.ToolTip = max ? "还原" : "最大化";
+    }
 
     private void OnShowMcp(object sender, RoutedEventArgs e)
         => new McpWindow { Owner = this }.ShowDialog();

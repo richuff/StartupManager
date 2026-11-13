@@ -7,30 +7,76 @@
         WindowStartupLocation="CenterScreen"
         TextOptions.TextRenderingMode="Grayscale"
         TextOptions.TextFormattingMode="Display"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        StateChanged="MainWindow_StateChanged">
+
+    <!-- 方案 2：WindowChrome 去掉原生标题栏视觉，保留系统缩放与边缘拖拽 -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"/>
+    </WindowChrome.WindowChrome>
 
     <DockPanel>
-        <!-- top bar: left = app title (shows current page) + menus -->
+        <!-- top bar: left = app icon + menus; right = 自定义 最小化/最大化/关闭 按钮 -->
         <Border DockPanel.Dock="Top" Background="{StaticResource Panel}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,6">
-                <Image x:Name="AppIconImage" Width="22" Height="22" Stretch="Uniform"
-                       VerticalAlignment="Center" Margin="12,0,14,0"
-                       RenderOptions.BitmapScalingMode="HighQuality"/>
-                <Menu Background="Transparent" BorderThickness="0">
-                    <MenuItem Header="编辑">
-                        <MenuItem Header="刷新" Tag="↻" Style="{StaticResource GlyphMenuItem}" Click="OnRefresh"/>
-                        <MenuItem Header="新建启动项" Tag="＋" Style="{StaticResource GlyphMenuItem}" Click="OnAdd"/>
-                        <Separator Style="{StaticResource MenuSeparator}"/>
-                        <MenuItem Header="退出程序" Tag="✕" Style="{StaticResource GlyphMenuItem}" Click="OnExit"/>
-                    </MenuItem>
-                    <MenuItem Header="设置">
-                        <MenuItem Header="MCP 服务…" Tag="⚙" Style="{StaticResource GlyphMenuItem}" Click="OnShowMcp"/>
-                        <Separator Style="{StaticResource MenuSeparator}"/>
-                        <MenuItem Header="打开数据目录" Tag="📁" Style="{StaticResource GlyphMenuItem}" Click="OnOpenDataDir"/>
-                    </MenuItem>
-                    <MenuItem Header="关于" Tag="ℹ" Style="{StaticResource GlyphMenuItem}" Click="OnAbout"/>
-                </Menu>
-            </StackPanel>
+            <Grid Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,6"
+                            MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
+                    <Image x:Name="AppIconImage" Width="22" Height="22" Stretch="Uniform"
+                           VerticalAlignment="Center" Margin="12,0,14,0"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <Menu Background="Transparent" BorderThickness="0">
+                        <MenuItem Header="编辑">
+                            <MenuItem Header="刷新" Tag="↻" Style="{StaticResource GlyphMenuItem}" Click="OnRefresh"/>
+                            <MenuItem Header="新建启动项" Tag="＋" Style="{StaticResource GlyphMenuItem}" Click="OnAdd"/>
+                            <Separator Style="{StaticResource MenuSeparator}"/>
+                            <MenuItem Header="退出程序" Tag="✕" Style="{StaticResource GlyphMenuItem}" Click="OnExit"/>
+                        </MenuItem>
+                        <MenuItem Header="设置">
+                            <MenuItem Header="MCP 服务…" Tag="⚙" Style="{StaticResource GlyphMenuItem}" Click="OnShowMcp"/>
+                            <Separator Style="{StaticResource MenuSeparator}"/>
+                            <MenuItem Header="打开数据目录" Tag="📁" Style="{StaticResource GlyphMenuItem}" Click="OnOpenDataDir"/>
+                        </MenuItem>
+                        <MenuItem Header="关于" Tag="ℹ" Style="{StaticResource GlyphMenuItem}" Click="OnAbout"/>
+                    </Menu>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                            Margin="0,0,4,0" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button x:Name="MinBtn" Style="{StaticResource TitleBarButton}" ToolTip="最小化" Click="OnMinimize">
+                        <Grid>
+                            <Path Width="10" Height="10" Stretch="None"
+                                  Data="M1,5 H9"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.1"/>
+                        </Grid>
+                    </Button>
+                    <Button x:Name="MaxBtn" Style="{StaticResource TitleBarButton}" ToolTip="最大化" Click="OnToggleMaximize">
+                        <Grid>
+                            <Path x:Name="MaxGlyph" Width="10" Height="10" Stretch="None"
+                                  Data="M1,1 H9 V9 H1 Z"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.1" Visibility="Visible"/>
+                            <Path x:Name="RestoreGlyph" Width="10" Height="10" Stretch="None"
+                                  Data="M1,3 H7 V9 H1 Z M3,1 H9 V7 H3 Z"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.1" Visibility="Collapsed"/>
+                        </Grid>
+                    </Button>
+                    <Button x:Name="CloseBtn" Style="{StaticResource TitleBarCloseButton}" ToolTip="关闭" Click="OnRequestClose">
+                        <Grid>
+                            <Path Width="10" Height="10" Stretch="None"
+                                  Data="M2,2 L8,8 M8,2 L2,8"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.1"/>
+                        </Grid>
+                    </Button>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <StatusBar DockPanel.Dock="Bottom">

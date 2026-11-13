@@ -105,6 +105,41 @@
         </Style.Triggers>
     </Style>
 
+    <!-- title-bar chrome button (minimize / maximize / restore) -->
+    <Style x:Key="TitleBarButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource Sub}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Width" Value="40"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PanelHover}"/>
+                            <Setter Property="Foreground" Value="{StaticResource Txt}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- title-bar close button: red on hover, matching the app danger color -->
+    <Style x:Key="TitleBarCloseButton" TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource Red}"/>
+                <Setter Property="Foreground" Value="White"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <Style TargetType="DataGrid">
         <Setter Property="Background" Value="{StaticResource Panel}"/>
         <Setter Property="Foreground" Value="{StaticResource Txt}"/>
