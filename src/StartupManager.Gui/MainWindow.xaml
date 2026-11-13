@@ -47,7 +47,7 @@
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                             Margin="0,0,4,0" WindowChrome.IsHitTestVisibleInChrome="True">
-                    <Button x:Name="MinBtn" Style="{StaticResource TitleBarButton}" ToolTip="最小化" Click="OnMinimize">
+                    <Button x:Name="MinBtn" Style="{StaticResource TitleBarButton}" ToolTip="最小化" Margin="0,0,4,0" Click="OnMinimize">
                         <Grid>
                             <Path Width="10" Height="10" Stretch="None"
                                   Data="M1,5 H9"
@@ -55,7 +55,7 @@
                                   StrokeThickness="1.1"/>
                         </Grid>
                     </Button>
-                    <Button x:Name="MaxBtn" Style="{StaticResource TitleBarButton}" ToolTip="最大化" Click="OnToggleMaximize">
+                    <Button x:Name="MaxBtn" Style="{StaticResource TitleBarButton}" ToolTip="最大化" Margin="0,0,4,0" Click="OnToggleMaximize">
                         <Grid>
                             <Path x:Name="MaxGlyph" Width="10" Height="10" Stretch="None"
                                   Data="M1,1 H9 V9 H1 Z"
