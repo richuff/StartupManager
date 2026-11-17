@@ -4,22 +4,32 @@ namespace StartupManager.Core.Providers;
 
 /// <summary>
 /// Manages a Startup folder full of .lnk shortcut files. A shortcut present in
-/// the folder is "enabled"; renaming it to ".lnk.disabled" disables it without
-/// deleting anything, so toggling works without administrator rights.
+/// the folder is "enabled"; disabling moves it into a hidden child folder so it
+/// no longer sits in the Startup folder proper. This is important: Windows runs
+/// every TOP-LEVEL file in the Startup folder at logon regardless of extension,
+/// so leaving an "a.lnk.disabled" file there makes Windows try to open it on
+/// every boot. Keeping disabled shortcuts in a subfolder avoids that entirely
+/// while still letting us enumerate and re-enable them without admin rights.
 /// </summary>
 public class FolderStartupProvider : IStartupProvider
 {
+    // Legacy suffix used by old builds that renamed shortcuts in place. We still
+    // read these (and migrate them on enumerate) for backwards compatibility.
     private const string DisabledExt = ".disabled";
+    // Hidden child folder holding disabled shortcuts. Windows ignores subfolders.
+    private const string DisabledDirName = ".sm-disabled";
 
     public EntryLocation Location { get; }
 
     public bool CanWrite { get; }
 
     private readonly string _folderPath;
+    private readonly string _disabledDir;
 
     public FolderStartupProvider(string folderPath, EntryLocation location)
     {
         _folderPath = folderPath;
+        _disabledDir = Path.Combine(folderPath, DisabledDirName);
         Location = location;
         CanWrite = Directory.Exists(folderPath) && HasWriteAccess(folderPath);
     }
@@ -44,40 +54,76 @@ public class FolderStartupProvider : IStartupProvider
         var list = new List<StartupEntry>();
         if (!Directory.Exists(_folderPath)) return list;
 
-        // Both "*.lnk" (enabled) and "*.lnk.disabled" (disabled) must be picked up.
-        // A plain "*.lnk" filter silently skips the .lnk.disabled files, which made
-        // disabled entries vanish from the list.
-        foreach (var file in Directory.EnumerateFiles(_folderPath, "*.lnk*"))
+        // Migrate any legacy top-level ".lnk.disabled" files into the hidden
+        // subfolder so Windows stops trying to open them at next logon.
+        MigrateLegacyDisabled();
+
+        // Enabled: top-level "*.lnk" shortcuts.
+        foreach (var file in Directory.EnumerateFiles(_folderPath, "*.lnk"))
+            list.Add(DescribeEntry(file, enabled: true));
+
+        // Disabled: shortcuts kept in the hidden child folder (plain "*.lnk").
+        if (Directory.Exists(_disabledDir))
         {
-            var fileName = Path.GetFileName(file);
-            var enabled = !fileName.EndsWith(".lnk" + DisabledExt, StringComparison.OrdinalIgnoreCase);
-            if (enabled && !fileName.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)) continue;
-
-            // Strip the suffix deliberately: GetFileNameWithoutExtension("a.lnk.disabled")
-            // returns "a.lnk", so we must remove the whole ".lnk[.disabled]" tail.
-            var entryName = enabled
-                ? fileName[..^".lnk".Length]
-                : fileName[..^( ".lnk" + DisabledExt ).Length];
-
-            var read = ShellLinkHelper.Read(file);
-            var target = read?.Path;
-            var args = read?.Arguments;
-            var command = target is null
-                ? ""
-                : string.IsNullOrEmpty(args) ? target : $"\"{target}\" {args}";
-            list.Add(new StartupEntry
-            {
-                Id = StartupEntry.MakeId(Location, entryName),
-                Name = entryName,
-                Command = command,
-                FilePath = target,
-                Location = Location,
-                Enabled = enabled,
-                Source = file,
-                Manufacturer = StartupEntry.ResolveManufacturer(target),
-            });
+            foreach (var file in Directory.EnumerateFiles(_disabledDir, "*.lnk"))
+                list.Add(DescribeEntry(file, enabled: false));
         }
+
         return list;
+    }
+
+    /// <summary>Move old in-place "*.lnk.disabled" files from the Startup folder
+    /// root into the hidden subfolder. Best effort: never let a migration hiccup
+    /// break enumeration.</summary>
+    private void MigrateLegacyDisabled()
+    {
+        if (!CanWrite || !Directory.Exists(_folderPath)) return;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(_folderPath, "*.lnk" + DisabledExt))
+            {
+                var fileName = Path.GetFileName(file);
+                var baseName = fileName[..^( ".lnk" + DisabledExt ).Length];
+                var dest = Path.Combine(_disabledDir, baseName + ".lnk");
+                try
+                {
+                    Directory.CreateDirectory(_disabledDir);
+                    // If a same-named enabled shortcut somehow exists, don't overwrite it.
+                    if (File.Exists(dest)) { File.Delete(file); continue; }
+                    File.Move(file, dest);
+                }
+                catch { /* leave it; will retry next time */ }
+            }
+        }
+        catch { /* best effort */ }
+    }
+
+    private StartupEntry DescribeEntry(string file, bool enabled)
+    {
+        var fileName = Path.GetFileName(file);
+        // Whether stored at top level (enabled) or in the child folder (disabled),
+        // the file is always a plain "*.lnk" now.
+        var entryName = fileName.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)
+            ? fileName[..^".lnk".Length]
+            : fileName;
+
+        var read = ShellLinkHelper.Read(file);
+        var target = read?.Path;
+        var args = read?.Arguments;
+        var command = target is null
+            ? ""
+            : string.IsNullOrEmpty(args) ? target : $"\"{target}\" {args}";
+        return new StartupEntry
+        {
+            Id = StartupEntry.MakeId(Location, entryName),
+            Name = entryName,
+            Command = command,
+            FilePath = target,
+            Location = Location,
+            Enabled = enabled,
+            Source = file,
+            Manufacturer = StartupEntry.ResolveManufacturer(target),
+        };
     }
 
     public void SetEnabled(StartupEntry entry, bool enabled)
@@ -85,8 +131,6 @@ public class FolderStartupProvider : IStartupProvider
         if (!CanWrite)
             throw new StartupManagerException($"未写入：没有权限修改 {Location.Describe()}（{_folderPath}）。");
 
-        // Derive the logical name from the actual file name. GetFileNameWithoutExtension
-        // would return "a.lnk" for "a.lnk.disabled", which broke re-enabling.
         var fileName = entry.Source is null ? entry.Name + ".lnk" : Path.GetFileName(entry.Source);
         var baseName = fileName.EndsWith(".lnk" + DisabledExt, StringComparison.OrdinalIgnoreCase)
             ? fileName[..^(".lnk" + DisabledExt).Length]
@@ -95,14 +139,22 @@ public class FolderStartupProvider : IStartupProvider
                 : fileName;
 
         var enabledPath = Path.Combine(_folderPath, baseName + ".lnk");
-        var disabledPath = Path.Combine(_folderPath, baseName + ".lnk" + DisabledExt);
+        var disabledPath = Path.Combine(_disabledDir, baseName + ".lnk");
         if (enabled)
         {
-            if (File.Exists(disabledPath) && !File.Exists(enabledPath)) File.Move(disabledPath, enabledPath);
+            Directory.CreateDirectory(_folderPath);
+            if (File.Exists(disabledPath) && !File.Exists(enabledPath))
+                File.Move(disabledPath, enabledPath);
         }
         else
         {
-            if (File.Exists(enabledPath) && !File.Exists(disabledPath)) File.Move(enabledPath, disabledPath);
+            if (File.Exists(enabledPath))
+            {
+                Directory.CreateDirectory(_disabledDir);
+                // Avoid clobbering an already-disabled entry with the same name.
+                if (File.Exists(disabledPath)) File.Delete(enabledPath);
+                else File.Move(enabledPath, disabledPath);
+            }
         }
     }
 
@@ -123,19 +175,22 @@ public class FolderStartupProvider : IStartupProvider
         if (string.IsNullOrWhiteSpace(command))
             throw new StartupManagerException("命令不能为空。");
 
+        var safeName = SanitizeFileName(name);
         try
         {
-            Directory.CreateDirectory(_folderPath);
+            if (enabled)
+                Directory.CreateDirectory(_folderPath);
+            else
+                Directory.CreateDirectory(_disabledDir);
         }
         catch (Exception ex)
         {
             throw new StartupManagerException($"未写入：无法创建启动文件夹 —— {ex.Message}");
         }
 
-        var safeName = SanitizeFileName(name);
-        var fileName = safeName + ".lnk";
-        if (!enabled) fileName += DisabledExt;
-        var fullPath = Path.Combine(_folderPath, fileName);
+        var fullPath = enabled
+            ? Path.Combine(_folderPath, safeName + ".lnk")
+            : Path.Combine(_disabledDir, safeName + ".lnk");
 
         var (exe, args) = StartupEntry.SplitCommandLine(command);
         if (exe is null || !File.Exists(exe))
