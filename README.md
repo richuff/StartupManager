@@ -163,11 +163,13 @@ stdout 只输出协议帧（每行一个 JSON 对象），诊断信息走 stderr
 
 ### 客户端配置示例
 
+把 `<INSTALL_DIR>` 换成实际安装目录即可；也可在主程序「设置 → MCP 服务…」里一键复制自动生成正确路径的配置。
+
 ```json
 {
   "mcpServers": {
     "startup-manager": {
-      "command": "D:\\StartupManager\\StartupManager.Mcp.exe",
+      "command": "<INSTALL_DIR>\\StartupManager.Mcp.exe",
       "args": []
     }
   }

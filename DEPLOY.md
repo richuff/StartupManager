@@ -81,13 +81,13 @@ powershell -ExecutionPolicy Bypass -File .\publish.ps1 -SingleFile
 
 ## 接入 LLM（MCP）
 
-主程序里打开 **设置 → MCP 服务…**，可查看状态并一键复制客户端配置。典型配置：
+主程序里打开 **设置 → MCP 服务…**，可查看状态并一键复制客户端配置（路径按实际安装目录自动生成）。典型配置如下，`<INSTALL_DIR>` 换成实际安装目录：
 
 ```json
 {
   "mcpServers": {
     "startup-manager": {
-      "command": "D:\\StartupManager\\StartupManager.Mcp.exe",
+      "command": "<INSTALL_DIR>\\StartupManager.Mcp.exe",
       "args": []
     }
   }
