@@ -16,6 +16,9 @@ obj/
 publish/
 *.publishproj
 
+# Installer generated binaries (keep the .iss source, ignore compiled setup exe)
+installer/Output/
+
 # Test / diagnostic artifacts
 *.log
 debug.log
